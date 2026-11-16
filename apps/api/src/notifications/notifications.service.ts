@@ -2,7 +2,7 @@ import { Global, Inject, Injectable, Logger, Module } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import webpush from 'web-push';
 import { ENV, Env } from '../config/env';
-import { MAIL_PORT, MailPort, MailTemplate } from '../mail/mail.service';
+import { MAIL_PORT, MailModule, MailPort, MailTemplate } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsHub } from './events.hub';
 
@@ -77,5 +77,5 @@ export class NotificationsService {
 }
 
 @Global()
-@Module({ providers: [EventsHub, NotificationsService], exports: [EventsHub, NotificationsService] })
+@Module({ imports: [MailModule], providers: [EventsHub, NotificationsService], exports: [EventsHub, NotificationsService] })
 export class NotificationsCoreModule {}
