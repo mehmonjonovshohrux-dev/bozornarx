@@ -14,6 +14,8 @@ body { @apply bg-cream-100 text-ink font-sans antialiased; min-height: 100dvh; }
   .btn-accent { @apply bg-accent-500 text-white hover:bg-accent-600 shadow-sm; }
   .btn-ghost { @apply bg-white text-brand-800 border border-cream-300 hover:bg-cream-50; }
   .input { @apply w-full rounded-xl border border-cream-300 bg-white px-4 py-3 text-[16px] text-ink placeholder:text-ink-muted/70 min-h-[48px] focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-100; }
+  .chip { @apply rounded-full border border-cream-300 bg-white px-3 py-1.5 text-sm font-semibold disabled:opacity-50; }
+  .chip-on { @apply border-brand-600 bg-brand-50 text-brand-800; }
   .input-error { @apply border-danger focus:border-danger focus:ring-red-100; }
   .card { @apply rounded-2xl bg-white border border-cream-300 shadow-card; }
   .label { @apply mb-1.5 block text-sm font-medium text-ink-soft; }

@@ -1,5 +1,6 @@
 'use client';
 import clsx from 'clsx';
+import { categoryArt, productArt } from '@/lib/productArt';
 import Link from 'next/link';
 import { useEffect, type ReactNode } from 'react';
 import type { ApiError } from '@/lib/api';
@@ -121,10 +122,21 @@ export function Confirm({ open, title, text, danger, busy, onYes, onNo }: { open
   );
 }
 
-export function ProductImage({ id, alt, className }: { id: string | null | undefined; alt: string; className?: string }) {
+export function ProductImage({ id, alt, name, category, className }: { id: string | null | undefined; alt: string; name?: string; category?: string | null; className?: string }) {
+  // A real uploaded photo always wins; otherwise the matching illustration from /assets (see lib/productArt.ts).
   // eslint-disable-next-line @next/next/no-img-element
-  return id ? <img src={`/api/files/${id}/public`} alt={alt} loading="lazy" className={clsx('object-cover', className)} />
-    : <div aria-hidden className={clsx('flex items-center justify-center bg-brand-50 text-4xl', className)}>🥬</div>;
+  if (id) return <img src={`/api/files/${id}/public`} alt={alt} loading="lazy" className={clsx('object-cover', className)} />;
+  return (
+    <div className={clsx('flex items-center justify-center bg-gradient-to-b from-cream-50 to-brand-50', className)}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={productArt(name ?? alt, category)} alt={alt} loading="lazy" className="h-full max-h-full w-full max-w-full object-contain p-2" />
+    </div>
+  );
+}
+
+export function CategoryArt({ name, className }: { name: string; className?: string }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={categoryArt(name)} alt={name} loading="lazy" className={clsx('object-contain', className)} />;
 }
 
 export function LinkCard({ href, children }: { href: string; children: ReactNode }) {
