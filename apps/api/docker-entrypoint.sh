@@ -16,18 +16,19 @@ echo "[entrypoint] loading reference data"
 node dist/scripts/seed-reference.js
 
 # Optional one-off tasks, driven by environment variables set in the Render dashboard (remove them afterwards).
-# They never stop the API from starting; failures are only logged.
+# They never stop or delay the API from starting; the demo tasks run in the background and failures are only logged.
 if [ -n "${ADMIN_EMAIL:-}" ] && [ -n "${ADMIN_PASSWORD:-}" ]; then
   echo "[entrypoint] creating first super admin (skipped if the email already exists)"
   node dist/scripts/create-admin.js || echo "[entrypoint] create-admin did not change anything (see message above)"
 fi
 if [ "${DEMO_SEED:-}" = "yes" ] && [ -n "${DEMO_PASSWORD:-}" ]; then
   echo "[entrypoint] loading DEMO data (tagged @demo.bozornarx.invalid)"
-  ALLOW_DEMO_SEED=yes ALLOW_DEMO_IN_PRODUCTION=yes node dist/scripts/seed-demo.js || echo "[entrypoint] demo seed failed (see message above)"
+  # Runs in the background: over a remote database the seed takes many minutes and must never delay the port (Render kills a deploy that does not open its port).
+  ( ALLOW_DEMO_SEED=yes ALLOW_DEMO_IN_PRODUCTION=yes node dist/scripts/seed-demo.js && echo "[entrypoint] demo seed finished" || echo "[entrypoint] demo seed failed (see message above)" ) &
 fi
 if [ "${DEMO_CLEANUP:-}" = "yes" ]; then
   echo "[entrypoint] removing DEMO data"
-  ALLOW_DEMO_SEED=yes ALLOW_DEMO_IN_PRODUCTION=yes DEMO_CLEANUP=yes node dist/scripts/seed-demo.js || echo "[entrypoint] demo cleanup failed (see message above)"
+  ( ALLOW_DEMO_SEED=yes ALLOW_DEMO_IN_PRODUCTION=yes DEMO_CLEANUP=yes node dist/scripts/seed-demo.js && echo "[entrypoint] demo cleanup finished" || echo "[entrypoint] demo cleanup failed (see message above)" ) &
 fi
 
 echo "[entrypoint] starting API"
