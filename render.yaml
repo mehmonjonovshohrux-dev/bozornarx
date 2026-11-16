@@ -1,11 +1,6 @@
 # Render Blueprint. Plans below are FREE so you can try it; read docs/DEPLOY_RENDER.md before real use
 # (free web services sleep after 15 min; the free database expires after 30 days).
-databases:
-  - name: bozornarx-db
-    plan: free
-    databaseName: bozornarx
-    user: bozornarx
-
+# Database: Supabase (external). Paste its Session-pooler URL into DATABASE_URL in the Render dashboard.
 services:
   - type: web
     name: bozornarx-api
@@ -26,7 +21,7 @@ services:
       - key: SMS_PROVIDER_MODE
         value: mock
       - key: DATABASE_URL
-        fromDatabase: { name: bozornarx-db, property: connectionString }
+        sync: false      # Supabase Session pooler URL (port 5432); set only in the Render dashboard
       - key: JWT_ACCESS_SECRET
         generateValue: true
       - key: OTP_HASH_PEPPER
