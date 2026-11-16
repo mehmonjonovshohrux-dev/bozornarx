@@ -67,9 +67,13 @@ export class AdminService {
     if (!role) throw new AppError(500, 'REFERENCE_DATA_MISSING', 'Rol topilmadi.');
     if (d.action === 'ADD') {
       if (!u.emailVerifiedAt || u.status !== 'ACTIVE') throw new AppError(409, 'NOT_ACTIVE', 'Rol faqat faol, emaili tasdiqlangan foydalanuvchiga beriladi.');
-      await this.prisma.userRole.upsert({ where: { userId_roleId: { userId: id, roleId: role.id } }, create: { userId: id, roleId: role.id }, update: {} });
+      // One account = one role: granting a role REPLACES the previous one (a person never holds two roles at once).
+      await this.prisma.$transaction([
+        this.prisma.userRole.deleteMany({ where: { userId: id, roleId: { not: role.id } } }),
+        this.prisma.userRole.upsert({ where: { userId_roleId: { userId: id, roleId: role.id } }, create: { userId: id, roleId: role.id }, update: {} }),
+      ]);
     } else {
-      if (u.roles.length <= 1) throw new AppError(409, 'LAST_ROLE', 'Foydalanuvchining kamida bitta roli qolishi kerak.');
+      if (u.roles.length <= 1) throw new AppError(409, 'LAST_ROLE', 'Foydalanuvchining roli bo‘lishi shart. Rolni almashtirish uchun yangi rol bering.');
       await this.prisma.userRole.deleteMany({ where: { userId: id, roleId: role.id } });
     }
     // active tokens carry the old roles: end the sessions so the change applies at the next sign-in
