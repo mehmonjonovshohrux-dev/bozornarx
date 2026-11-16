@@ -1,0 +1,1136 @@
+// BozorNarx database schema (PostgreSQL + Prisma).
+// STATUS: written but NOT yet validated with `prisma validate` (no package install was possible in the authoring environment).
+// First step on a machine with network: `pnpm install && pnpm prisma validate && pnpm prisma migrate dev --name init`.
+//
+// Data rules:
+//  - price_history, contract_versions, contract_signatures, contract_events, audit_logs are append-only (no UPDATE/DELETE in code; add DB triggers in a migration).
+//  - users, stores, products are soft-deleted (deletedAt). Prices, contracts and audit rows are never deleted.
+//  - Money is Decimal, never Float. Currency defaults to UZS.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────── Enums ─────────────
+
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum OtpPurpose {
+  REGISTER
+  LOGIN
+  PASSWORD_RESET
+  CHANGE_EMAIL
+  CHANGE_PHONE
+}
+
+enum RegionType {
+  VILOYAT
+  TUMAN
+  SHAHAR
+  MAHALLA
+}
+
+enum StoreStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum UnitDimension {
+  MASS
+  VOLUME
+  COUNT
+  LENGTH
+  AREA
+  CUBIC
+  PACK
+}
+
+enum ProductStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+enum PriceSource {
+  SELLER
+  FIELD_AGENT
+  USER_REPORT
+}
+
+enum Availability {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+  UNKNOWN
+}
+
+enum TrustStatus {
+  INSUFFICIENT_DATA
+  SCORED
+  REJECTED
+}
+
+enum AlertDirection {
+  BELOW
+  ABOVE
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  PUSH
+  SMS
+}
+
+enum OrderStatus {
+  CREATED
+  CONFIRMED
+  PROCESSING
+  READY
+  SHIPPED
+  DELIVERED
+  ACCEPTED
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum ContractType {
+  SALE
+  DELIVERY
+  WHOLESALE
+  SUPPLY
+  PARTNERSHIP
+  SERVICE
+  PLATFORM_OFFER
+}
+
+enum ContractStatus {
+  DRAFT
+  PENDING_REVIEW
+  WAITING_FOR_BUYER
+  WAITING_FOR_SELLER
+  PARTIALLY_SIGNED
+  FULLY_SIGNED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  DISPUTED
+  EXPIRED
+}
+
+enum PartyRole {
+  BUYER
+  SELLER
+}
+
+// Only the official provider is modelled. A drawn signature is NOT an official e-signature and has no enum value.
+enum SignatureProvider {
+  EIMZO
+}
+
+enum VerificationStatus {
+  PENDING
+  VALID
+  INVALID
+  PROVIDER_NOT_CONFIGURED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum DeliveryStatus {
+  PENDING
+  IN_TRANSIT
+  DELIVERED
+  ACCEPTED
+  RETURN_REQUESTED
+  RETURNED
+}
+
+enum ComplaintStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  REJECTED
+}
+
+enum DisputeStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  APPEALED
+  CLOSED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+// ───────────── Identity and access ─────────────
+
+model User {
+  id              String     @id @default(uuid()) @db.Uuid
+  pending         PendingRegistration?
+  email           String     @unique
+  emailVerifiedAt DateTime?
+  phone           String?    @unique
+  phoneVerifiedAt DateTime?
+  passwordHash    String // Argon2id
+  status          UserStatus @default(PENDING_VERIFICATION)
+  mfaSecretEnc    String? // encrypted TOTP secret, optional MFA
+  failedLogins    Int        @default(0)
+  lockedUntil     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  deletedAt       DateTime?
+
+  profile            UserProfile?
+  roles              UserRole[]
+  emailVerifications EmailVerification[]
+  phoneVerifications PhoneVerification[]
+  sessions           Session[]
+  stores             Store[]
+  favorites          Favorite[]
+  priceAlerts        PriceAlert[]
+  buyerOrders        Order[]             @relation("OrderBuyer")
+  buyerContracts     Contract[]          @relation("ContractBuyer")
+  signatures         ContractSignature[]
+  buyerConversations Conversation[]      @relation("ConversationBuyer")
+  messages           Message[]
+  notifications      Notification[]
+  reviews            Review[]
+  complaints         Complaint[]
+  moderationActions  ModerationAction[]
+  auditLogs          AuditLog[]
+  createdPrices      PriceRecord[]       @relation("PriceCreatedBy")
+}
+
+model UserProfile {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @unique @db.Uuid
+  fullName          String
+  avatarKey         String?
+  regionId          String?  @db.Uuid
+  locale            String   @default("uz")
+  notificationPrefs Json     @default("{}")
+  updatedAt         DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  region Region? @relation(fields: [regionId], references: [id])
+}
+
+model Role {
+  id          String           @id @default(uuid()) @db.Uuid
+  name        String           @unique // GUEST is not stored: it means "no session"
+  description String?
+  permissions RolePermission[]
+  users       UserRole[]
+}
+
+model Permission {
+  id          String           @id @default(uuid()) @db.Uuid
+  key         String           @unique // e.g. prices.moderate
+  description String?
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  roleId       String @db.Uuid
+  permissionId String @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model UserRole {
+  userId    String   @db.Uuid
+  roleId    String   @db.Uuid
+  grantedAt DateTime @default(now())
+  grantedBy String?  @db.Uuid
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([userId, roleId])
+}
+
+// OTP codes are stored only as hashes, are single-use, expire, and have an attempt counter (brute-force protection).
+model EmailVerification {
+  id         String     @id @default(uuid()) @db.Uuid
+  userId     String     @db.Uuid
+  email      String
+  codeHash   String
+  purpose    OtpPurpose
+  attempts   Int        @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime   @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose, createdAt])
+}
+
+model PhoneVerification {
+  id         String     @id @default(uuid()) @db.Uuid
+  userId     String     @db.Uuid
+  phone      String
+  codeHash   String
+  purpose    OtpPurpose
+  attempts   Int        @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime   @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose, createdAt])
+}
+
+model Session {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @db.Uuid
+  refreshTokenHash String    @unique
+  prevRefreshHash  String? // previous rotated token: if it is presented again, the token was stolen, so all sessions are revoked
+  deviceHash       String? // sha256 of the User-Agent, used for "new device" alerts
+  userAgent        String?
+  ip               String?
+  createdAt        DateTime  @default(now())
+  lastUsedAt       DateTime  @default(now())
+  expiresAt        DateTime
+  revokedAt        DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([prevRefreshHash])
+}
+
+// ───────────── Geography and stores ─────────────
+
+model Region {
+  id       String     @id @default(uuid()) @db.Uuid
+  parentId String?    @db.Uuid
+  type     RegionType
+  name     String
+  slug     String     @unique
+  lat      Float?
+  lng      Float?
+
+  parent        Region?       @relation("RegionTree", fields: [parentId], references: [id])
+  children      Region[]      @relation("RegionTree")
+  markets       Market[]
+  stores        Store[]
+  priceRecords  PriceRecord[]
+  priceHistory  PriceHistory[]
+  profiles      UserProfile[]
+
+  @@index([parentId])
+}
+
+model Market {
+  id        String  @id @default(uuid()) @db.Uuid
+  regionId  String  @db.Uuid
+  name      String
+  address   String?
+  lat       Float?
+  lng       Float?
+
+  region       Region        @relation(fields: [regionId], references: [id])
+  stores       Store[]
+  priceRecords PriceRecord[]
+
+  @@index([regionId])
+}
+
+model Store {
+  id          String      @id @default(uuid()) @db.Uuid
+  ownerId     String      @db.Uuid
+  regionId    String      @db.Uuid
+  marketId    String?     @db.Uuid
+  name        String
+  slug        String      @unique
+  description String?
+  status      StoreStatus @default(PENDING)
+  verifiedAt  DateTime?
+  lat         Float?
+  lng         Float?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  deletedAt   DateTime?
+
+  owner         User             @relation(fields: [ownerId], references: [id])
+  region        Region           @relation(fields: [regionId], references: [id])
+  market        Market?          @relation(fields: [marketId], references: [id])
+  documents     SellerDocument[]
+  priceRecords  PriceRecord[]
+  orders        Order[]          @relation("OrderStore")
+  contracts     Contract[]       @relation("ContractSellerStore")
+  conversations Conversation[]
+  reviews       Review[]
+  subscriptions Subscription[]
+
+  @@index([ownerId])
+  @@index([regionId, status])
+}
+
+model SellerDocument {
+  id           String       @id @default(uuid()) @db.Uuid
+  storeId      String       @db.Uuid
+  type         String
+  fileKey      String // object storage key, never a public URL
+  status       ReviewStatus @default(PENDING)
+  reviewedById String?      @db.Uuid
+  reviewedAt   DateTime?
+  createdAt    DateTime     @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, status])
+}
+
+// ───────────── Catalog ─────────────
+
+model Category {
+  id        String  @id @default(uuid()) @db.Uuid
+  parentId  String? @db.Uuid
+  name      String
+  slug      String  @unique
+  sortOrder Int     @default(0)
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  products Product[]
+
+  @@index([parentId])
+}
+
+model Unit {
+  id        String        @id @default(uuid()) @db.Uuid
+  code      String        @unique // kg, g, l, ml, dona, qadoq, m, m2, m3, t
+  name      String
+  dimension UnitDimension
+  toBase    Decimal?      @db.Decimal(18, 6) // null for PACK
+
+  products     Product[]
+  variants     ProductVariant[]
+  priceRecords PriceRecord[]
+  orderItems   OrderItem[]
+}
+
+model Product {
+  id          String        @id @default(uuid()) @db.Uuid
+  categoryId  String        @db.Uuid
+  unitId      String        @db.Uuid // default unit for comparison
+  name        String
+  slug        String        @unique
+  brand       String?
+  description String?
+  sku         String?
+  barcode     String?
+  status      ProductStatus @default(PENDING)
+  createdById String?       @db.Uuid
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deletedAt   DateTime?
+
+  category     Category         @relation(fields: [categoryId], references: [id])
+  unit         Unit             @relation(fields: [unitId], references: [id])
+  variants     ProductVariant[]
+  images       ProductImage[]
+  priceRecords PriceRecord[]
+  priceHistory PriceHistory[]
+  favorites    Favorite[]
+  priceAlerts  PriceAlert[]
+  orderItems   OrderItem[]
+
+  @@index([categoryId, status])
+  @@index([name])
+}
+
+model ProductVariant {
+  id        String   @id @default(uuid()) @db.Uuid
+  productId String   @db.Uuid
+  name      String // e.g. "5 kg qop"
+  unitId    String   @db.Uuid
+  quantity  Decimal  @db.Decimal(18, 4) // content size in `unit`, needed to compare packs
+  sku       String?
+  barcode   String?
+  createdAt DateTime @default(now())
+
+  product      Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  unit         Unit          @relation(fields: [unitId], references: [id])
+  priceRecords PriceRecord[]
+  orderItems   OrderItem[]
+
+  @@unique([productId, name])
+}
+
+model ProductImage {
+  id        String @id @default(uuid()) @db.Uuid
+  productId String @db.Uuid
+  fileKey   String
+  sortOrder Int    @default(0)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+// ───────────── Prices ─────────────
+
+// price_records = the current price of one product (variant) at one store.
+// Every change also appends a row to price_history, so nothing is ever lost.
+model PriceRecord {
+  id                String           @id @default(uuid()) @db.Uuid
+  productId         String           @db.Uuid
+  variantId         String?          @db.Uuid
+  storeId           String           @db.Uuid
+  regionId          String           @db.Uuid
+  marketId          String?          @db.Uuid
+  unitId            String           @db.Uuid
+  price             Decimal          @db.Decimal(14, 2)
+  currency          String           @default("UZS")
+  quantityAvailable Decimal?         @db.Decimal(18, 4)
+  availability      Availability     @default(UNKNOWN)
+  deliveryAvailable Boolean          @default(false)
+  discountPercent   Decimal?         @db.Decimal(5, 2)
+  note              String?
+  deletedAt         DateTime? // withdrawn by the seller; history is kept
+  source            PriceSource      @default(SELLER)
+  moderationStatus  ReviewStatus     @default(PENDING)
+  createdById       String           @db.Uuid
+  confirmedAt       DateTime         @default(now())
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  product  Product         @relation(fields: [productId], references: [id])
+  variant  ProductVariant? @relation(fields: [variantId], references: [id])
+  store    Store           @relation(fields: [storeId], references: [id])
+  region   Region          @relation(fields: [regionId], references: [id])
+  market   Market?         @relation(fields: [marketId], references: [id])
+  unit     Unit            @relation(fields: [unitId], references: [id])
+  createdBy User           @relation("PriceCreatedBy", fields: [createdById], references: [id])
+
+  history  PriceHistory[]
+  evidence PriceEvidence[]
+  trust    TrustAssessment[]
+
+  // Postgres treats NULL variantId as distinct; the service layer enforces one record per (store, product) when variantId is null.
+  @@unique([storeId, productId, variantId])
+  @@index([productId, regionId, moderationStatus])
+  @@index([regionId, updatedAt])
+}
+
+model PriceHistory {
+  id            String       @id @default(uuid()) @db.Uuid
+  priceRecordId String       @db.Uuid
+  productId     String       @db.Uuid
+  regionId      String       @db.Uuid
+  price         Decimal      @db.Decimal(14, 2)
+  availability  Availability
+  changedById   String?      @db.Uuid
+  reason        String?
+  recordedAt    DateTime     @default(now())
+
+  priceRecord PriceRecord @relation(fields: [priceRecordId], references: [id])
+  product     Product     @relation(fields: [productId], references: [id])
+  region      Region      @relation(fields: [regionId], references: [id])
+
+  @@index([productId, regionId, recordedAt])
+  @@index([priceRecordId, recordedAt])
+}
+
+model PriceEvidence {
+  id            String   @id @default(uuid()) @db.Uuid
+  priceRecordId String   @db.Uuid
+  fileKey       String
+  mimeType      String
+  uploadedById  String   @db.Uuid
+  createdAt     DateTime @default(now())
+
+  priceRecord PriceRecord @relation(fields: [priceRecordId], references: [id], onDelete: Cascade)
+
+  @@index([priceRecordId])
+}
+
+// score is NULL when status is INSUFFICIENT_DATA. Fake percentages are not stored.
+model TrustAssessment {
+  id            String      @id @default(uuid()) @db.Uuid
+  priceRecordId String      @db.Uuid
+  status        TrustStatus
+  score         Int?
+  factors       Json        @default("{}")
+  computedAt    DateTime    @default(now())
+
+  priceRecord PriceRecord @relation(fields: [priceRecordId], references: [id], onDelete: Cascade)
+
+  @@index([priceRecordId, computedAt])
+}
+
+// ───────────── Buyer activity ─────────────
+
+model Favorite {
+  userId    String   @db.Uuid
+  productId String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([userId, productId])
+}
+
+model PriceAlert {
+  id              String                @id @default(uuid()) @db.Uuid
+  userId          String                @db.Uuid
+  productId       String                @db.Uuid
+  regionId        String?               @db.Uuid
+  direction       AlertDirection
+  targetPrice     Decimal               @db.Decimal(14, 2)
+  unitCode        String // price is per this unit, e.g. kg
+  channels        NotificationChannel[]
+  active          Boolean               @default(true)
+  lastTriggeredAt DateTime?
+  createdAt       DateTime              @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, active])
+  @@index([userId])
+}
+
+// ───────────── Orders, payments, delivery ─────────────
+
+model Order {
+  id              String      @id @default(uuid()) @db.Uuid
+  number          String      @unique // e.g. ORD-2026-000123
+  buyerId         String      @db.Uuid
+  storeId         String      @db.Uuid
+  status          OrderStatus @default(CREATED)
+  totalAmount     Decimal     @db.Decimal(14, 2)
+  discountAmount  Decimal     @default(0) @db.Decimal(14, 2)
+  deliveryFee     Decimal     @default(0) @db.Decimal(14, 2)
+  couponCode      String?
+  paymentMethod   String      @default("CASH_ON_DELIVERY") // CASH_ON_DELIVERY | CARD (needs a payment provider)
+  currency        String      @default("UZS")
+  deliveryMethod  String?
+  deliveryAddress String?
+  note            String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  buyer     User        @relation("OrderBuyer", fields: [buyerId], references: [id])
+  store     Store       @relation("OrderStore", fields: [storeId], references: [id])
+  items     OrderItem[]
+  contract  Contract?
+  payments  Payment[]
+  delivery  Delivery?
+  disputes  Dispute[]
+  reviews   Review[]
+
+  @@index([buyerId, status])
+  @@index([storeId, status])
+}
+
+model OrderItem {
+  id            String   @id @default(uuid()) @db.Uuid
+  orderId       String   @db.Uuid
+  productId     String   @db.Uuid
+  variantId     String?  @db.Uuid
+  unitId        String   @db.Uuid
+  quantity      Decimal  @db.Decimal(18, 4)
+  unitPrice     Decimal  @db.Decimal(14, 2) // snapshot at order time
+  priceRecordId String?  @db.Uuid
+
+  order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id])
+  variant ProductVariant? @relation(fields: [variantId], references: [id])
+  unit    Unit            @relation(fields: [unitId], references: [id])
+
+  @@index([orderId])
+}
+
+// The platform does not hold funds. Payments go through a licensed provider via the adapter layer.
+model Payment {
+  id          String        @id @default(uuid()) @db.Uuid
+  orderId     String        @db.Uuid
+  provider    String
+  providerRef String?
+  amount      Decimal       @db.Decimal(14, 2)
+  currency    String        @default("UZS")
+  status      PaymentStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@unique([provider, providerRef])
+  @@index([orderId])
+}
+
+model Delivery {
+  id           String         @id @default(uuid()) @db.Uuid
+  orderId      String         @unique @db.Uuid
+  status       DeliveryStatus @default(PENDING)
+  address      String?
+  carrier      String?
+  trackingRef  String?
+  deliveredAt  DateTime?
+  acceptedAt   DateTime? // buyer acceptance (qabul qilish dalolatnomasi)
+  evidenceKeys String[]
+  updatedAt    DateTime       @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id])
+}
+
+// ───────────── Contracts and e-signature ─────────────
+
+model Contract {
+  id            String         @id @default(uuid()) @db.Uuid
+  number        String         @unique // e.g. BN-2026-00124
+  type          ContractType
+  status        ContractStatus @default(DRAFT)
+  orderId       String?        @unique @db.Uuid
+  buyerId       String         @db.Uuid
+  sellerStoreId String         @db.Uuid
+  signedAt      DateTime?
+  expiresAt     DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  order       Order?              @relation(fields: [orderId], references: [id])
+  buyer       User                @relation("ContractBuyer", fields: [buyerId], references: [id])
+  sellerStore Store               @relation("ContractSellerStore", fields: [sellerStoreId], references: [id])
+  versions    ContractVersion[]
+  signatures  ContractSignature[]
+  events      ContractEvent[]
+  disputes    Dispute[]
+
+  @@index([buyerId, status])
+  @@index([sellerStoreId, status])
+}
+
+// A version is immutable. Changing terms creates a new version and invalidates earlier signatures for it.
+model ContractVersion {
+  id          String   @id @default(uuid()) @db.Uuid
+  contractId  String   @db.Uuid
+  version     Int
+  body        Json // structured terms: parties, goods, qty, price, delivery, payment, warranty
+  pdfKey      String?
+  sha256      String // hash of the exact PDF bytes that parties sign
+  createdById String   @db.Uuid
+  createdAt   DateTime @default(now())
+
+  contract   Contract            @relation(fields: [contractId], references: [id])
+  signatures ContractSignature[]
+
+  @@unique([contractId, version])
+}
+
+model ContractSignature {
+  id                 String             @id @default(uuid()) @db.Uuid
+  contractId         String             @db.Uuid
+  versionId          String             @db.Uuid
+  signerId           String             @db.Uuid
+  partyRole          PartyRole
+  provider           SignatureProvider  @default(EIMZO)
+  signedDocSha256    String
+  signatureBlob      Bytes? // PKCS#7 returned by the provider
+  certSerial         String?
+  certSubject        String?
+  certValidFrom      DateTime?
+  certValidTo        DateTime?
+  timestampToken     Bytes?
+  verification       VerificationStatus @default(PENDING)
+  verificationDetail Json?
+  verifiedAt         DateTime?
+  signedAt           DateTime           @default(now())
+
+  contract Contract        @relation(fields: [contractId], references: [id])
+  version  ContractVersion @relation(fields: [versionId], references: [id])
+  signer   User            @relation(fields: [signerId], references: [id])
+
+  @@unique([versionId, partyRole])
+  @@index([contractId])
+}
+
+model ContractEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  contractId String   @db.Uuid
+  actorId    String?  @db.Uuid
+  type       String
+  data       Json     @default("{}")
+  createdAt  DateTime @default(now())
+
+  contract Contract @relation(fields: [contractId], references: [id])
+
+  @@index([contractId, createdAt])
+}
+
+// ───────────── Chat and notifications ─────────────
+
+model Conversation {
+  id            String    @id @default(uuid()) @db.Uuid
+  buyerId       String    @db.Uuid
+  storeId       String    @db.Uuid
+  blockedById   String?   @db.Uuid
+  lastMessageAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  buyer    User      @relation("ConversationBuyer", fields: [buyerId], references: [id])
+  store    Store     @relation(fields: [storeId], references: [id])
+  messages Message[]
+
+  @@unique([buyerId, storeId])
+}
+
+model Message {
+  id             String    @id @default(uuid()) @db.Uuid
+  conversationId String    @db.Uuid
+  senderId       String    @db.Uuid
+  body           String?
+  attachmentKey  String?
+  attachmentType String?
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id])
+
+  @@index([conversationId, createdAt])
+}
+
+model Notification {
+  id        String              @id @default(uuid()) @db.Uuid
+  userId    String              @db.Uuid
+  type      String // PRICE_DROP, ORDER_STATUS, CONTRACT_WAITING, ...
+  title     String
+  body      String
+  data      Json                @default("{}")
+  channel   NotificationChannel @default(IN_APP)
+  readAt    DateTime?
+  createdAt DateTime            @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+}
+
+// ───────────── Reviews, complaints, moderation ─────────────
+
+model Review {
+  id        String       @id @default(uuid()) @db.Uuid
+  authorId  String       @db.Uuid
+  storeId   String       @db.Uuid
+  orderId   String?      @db.Uuid
+  rating    Int // 1..5, enforced by a CHECK constraint in the migration
+  comment   String?
+  status    ReviewStatus @default(PENDING)
+  createdAt DateTime     @default(now())
+
+  author User   @relation(fields: [authorId], references: [id])
+  store  Store  @relation(fields: [storeId], references: [id])
+  order  Order? @relation(fields: [orderId], references: [id])
+
+  @@unique([authorId, orderId])
+  @@index([storeId, status])
+}
+
+model Complaint {
+  id         String          @id @default(uuid()) @db.Uuid
+  filedById  String          @db.Uuid
+  targetType String // PRICE, PRODUCT, STORE, USER, CONTRACT, MESSAGE
+  targetId   String          @db.Uuid
+  reason     String
+  details    String?
+  status     ComplaintStatus @default(OPEN)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  filedBy  User      @relation(fields: [filedById], references: [id])
+  disputes Dispute[]
+
+  @@index([status, createdAt])
+  @@index([targetType, targetId])
+}
+
+model Dispute {
+  id          String        @id @default(uuid()) @db.Uuid
+  complaintId String?       @db.Uuid
+  orderId     String?       @db.Uuid
+  contractId  String?       @db.Uuid
+  openedById  String        @db.Uuid
+  status      DisputeStatus @default(OPEN)
+  resolution  String?
+  evidence    Json          @default("[]")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  complaint Complaint? @relation(fields: [complaintId], references: [id])
+  order     Order?     @relation(fields: [orderId], references: [id])
+  contract  Contract?  @relation(fields: [contractId], references: [id])
+
+  @@index([status, createdAt])
+}
+
+// Every moderation decision must carry a reason (NOT NULL). An appeal points back to the decision it contests.
+model ModerationAction {
+  id          String   @id @default(uuid()) @db.Uuid
+  moderatorId String   @db.Uuid
+  targetType  String
+  targetId    String   @db.Uuid
+  action      String // APPROVE, REJECT, HIDE, SUSPEND, ...
+  reason      String
+  evidence    Json     @default("[]")
+  appealOfId  String?  @db.Uuid
+  createdAt   DateTime @default(now())
+
+  moderator User               @relation(fields: [moderatorId], references: [id])
+  appealOf  ModerationAction?  @relation("Appeal", fields: [appealOfId], references: [id])
+  appeals   ModerationAction[] @relation("Appeal")
+
+  @@index([targetType, targetId])
+  @@index([moderatorId, createdAt])
+}
+
+// ───────────── Plans, audit, settings ─────────────
+
+model Subscription {
+  id        String             @id @default(uuid()) @db.Uuid
+  storeId   String             @db.Uuid
+  plan      String
+  status    SubscriptionStatus @default(ACTIVE)
+  startedAt DateTime           @default(now())
+  endsAt    DateTime?
+
+  store Store @relation(fields: [storeId], references: [id])
+
+  @@index([storeId, status])
+}
+
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  actorId    String?  @db.Uuid
+  action     String
+  entityType String
+  entityId   String?
+  before     Json?
+  after      Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt])
+  @@index([createdAt])
+}
+
+model SystemSetting {
+  key         String   @id
+  value       Json
+  updatedById String?  @db.Uuid
+  updatedAt   DateTime @updatedAt
+}
+
+
+// ───────────── Added in phase 4+ ─────────────
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  COUNTERED
+  CANCELLED
+  EXPIRED
+}
+
+// Registration data waits here until the email code is confirmed. The users row keeps an unusable password until then,
+// so re-registering someone else's unverified email can never change a password that is already in use.
+model PendingRegistration {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @unique @db.Uuid
+  passwordHash String
+  fullName     String
+  phone        String?
+  roleName     String
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Cart {
+  id        String     @id @default(uuid()) @db.Uuid
+  userId    String     @unique @db.Uuid // plain column: carts are disposable
+  updatedAt DateTime   @updatedAt
+  items     CartItem[]
+}
+
+model CartItem {
+  id            String   @id @default(uuid()) @db.Uuid
+  cartId        String   @db.Uuid
+  priceRecordId String   @db.Uuid
+  quantity      Decimal  @db.Decimal(18, 4)
+  createdAt     DateTime @default(now())
+
+  cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, priceRecordId])
+}
+
+// Append-only stock ledger. PriceRecord.quantityAvailable is the current balance; every change has a row here.
+model StockMovement {
+  id            String   @id @default(uuid()) @db.Uuid
+  priceRecordId String   @db.Uuid
+  delta         Decimal  @db.Decimal(18, 4)
+  balanceAfter  Decimal  @db.Decimal(18, 4)
+  reason        String // RESTOCK, ADJUST, ORDER_RESERVED, ORDER_CANCELLED
+  refType       String?
+  refId         String?
+  actorId       String?  @db.Uuid
+  createdAt     DateTime @default(now())
+
+  @@index([priceRecordId, createdAt])
+}
+
+model Discount {
+  id          String    @id @default(uuid()) @db.Uuid
+  storeId     String    @db.Uuid
+  code        String
+  percent     Decimal   @db.Decimal(5, 2)
+  minAmount   Decimal?  @db.Decimal(14, 2)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  usageLimit  Int?
+  usedCount   Int       @default(0)
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  @@unique([storeId, code])
+}
+
+// Wholesale: from `minQuantity` upwards the unit price is `unitPrice`.
+model WholesaleTier {
+  id            String   @id @default(uuid()) @db.Uuid
+  priceRecordId String   @db.Uuid
+  minQuantity   Decimal  @db.Decimal(18, 4)
+  unitPrice     Decimal  @db.Decimal(14, 2)
+
+  @@unique([priceRecordId, minQuantity])
+}
+
+model Offer {
+  id               String      @id @default(uuid()) @db.Uuid
+  buyerId          String      @db.Uuid
+  storeId          String      @db.Uuid
+  priceRecordId    String      @db.Uuid
+  quantity         Decimal     @db.Decimal(18, 4)
+  offeredUnitPrice Decimal     @db.Decimal(14, 2)
+  counterUnitPrice Decimal?    @db.Decimal(14, 2)
+  message          String?
+  deliveryMethod   String      @default("PICKUP")
+  deliveryAddress  String?
+  paymentMethod    String      @default("CASH_ON_DELIVERY")
+  status           OfferStatus @default(PENDING)
+  orderId          String?     @db.Uuid
+  expiresAt        DateTime
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@index([buyerId, status])
+  @@index([storeId, status])
+}
+
+model ContractTemplate {
+  id          String       @id @default(uuid()) @db.Uuid
+  type        ContractType
+  name        String
+  version     Int          @default(1)
+  clauses     Json // [{ title, text }] with {{placeholders}}
+  active      Boolean      @default(true)
+  createdById String?      @db.Uuid
+  createdAt   DateTime     @default(now())
+
+  @@unique([type, name, version])
+}
+
+model Plan {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique
+  name        String
+  priceUzs    Decimal  @db.Decimal(14, 2)
+  maxProducts Int
+  features    Json     @default("[]")
+  active      Boolean  @default(true)
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Files are stored in PostgreSQL (bytea) so deployment needs no extra storage service.
+// StorageService is the only code that touches this table; switch it to S3 later without changing callers.
+model FileObject {
+  id        String   @id @default(uuid()) @db.Uuid
+  ownerId   String   @db.Uuid
+  kind      String // PRODUCT_IMAGE, CHAT, EVIDENCE, STORE_DOC, CONTRACT_PDF
+  mime      String
+  size      Int
+  sha256    String
+  isPublic  Boolean  @default(false)
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  @@index([ownerId, kind])
+}
+
+model OrderEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  orderId   String   @db.Uuid
+  actorId   String?  @db.Uuid
+  fromState String?
+  toState   String
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([orderId, createdAt])
+}

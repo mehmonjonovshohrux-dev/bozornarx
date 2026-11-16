@@ -1,0 +1,15 @@
+# Decisions
+- Modular monolith (NestJS) + Next.js; browser talks only to `/api/*` (Next rewrite). Access token in memory, refresh token httpOnly cookie.
+- Permission-based RBAC (never role-name checks); every route declares `Secured(...perms)`; ownership is re-checked in services. Super Admin cannot act as a contract party.
+- Money is `Decimal`; prices are compared per base unit (kg/l/dona/m/m²/m³). Packs of unknown size are never ranked.
+- Price moderation: verified store + price within ±40% of regional median (≥2 other prices) → auto-approved, else queued. Stale after 7 days. Withdrawal is soft delete; history is kept.
+- Trust Score: independent confirmations (other stores within ±10%, 7 days), age, evidence, store verification, deviation. Stored on writes, computed on demand for reads.
+- Stock: `quantityAvailable` + append-only `StockMovement`; atomic conditional decrement at order creation; release on cancel.
+- Orders: strict state machine; seller moves CONFIRMED→…→DELIVERED, buyer accepts; completion needs payment settled. Card payment → 503 until a provider exists; cash on delivery is confirmed by the seller. **No escrow** (platform never holds money).
+- Contracts: auto-created when the seller confirms an order; versions immutable (PDF + sha256); edits only in DRAFT create a new version. Signing requires a verified PKCS#7 from E-IMZO — the adapter rejects everything while E-IMZO is unavailable, so nothing is ever falsely "signed". Because of that, `orders.requireSignedContract` defaults to **false** (otherwise no order could complete); turn it on once E-IMZO works. The delivery act PDF is labelled "not E-IMZO signed".
+- Disputes: order → DISPUTED; moderator (not the opener) resolves; one appeal to Super Admin.
+- Files live in PostgreSQL (`bytea`), uploaded as base64 JSON, magic-byte sniffed; product images public, everything else access-checked.
+- Real-time: Server-Sent Events from an in-memory hub (single instance). Chosen over WebSockets: simpler, works through the Next rewrite, auto-reconnect. Next gzip is off so the stream is not buffered.
+- No scheduler dependency: housekeeping runs on plain timers (idempotent).
+- Demo data is separate: `npm run seed:demo` (opt-in, tagged `@demo.bozornarx.invalid` / `[DEMO]`, refuses production). The normal seed creates only reference data (roles, permissions, units, 14 regions, categories, default templates).
+- Frontend uses a small `useApi` hook instead of TanStack Query (no installs were possible); SVG charts without a chart library.
