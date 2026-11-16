@@ -1,8 +1,10 @@
 'use client';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { PageShell } from '@/components/PageShell';
 import { Empty, ErrorBox, PageTitle, Pager, ProductImage, Spinner, Badge } from '@/components/ui/kit';
+import { Icon } from '@/components/ui/Icon';
 import { money } from '@/lib/fmt';
 import { qs, usePublicApi, type Paged } from '@/lib/hooks';
 
@@ -11,7 +13,8 @@ interface Cat { id: string; name: string; children: Cat[] }
 const flat = (c: Cat[], d = 0): Array<{ id: string; name: string }> => c.flatMap((x) => [{ id: x.id, name: `${'— '.repeat(d)}${x.name}` }, ...flat(x.children, d + 1)]);
 
 function Catalog() {
-  const [f, setF] = useState({ q: '', categoryId: '', regionId: '', sort: 'newest', delivery: '', verifiedOnly: '', availability: '', minPrice: '', maxPrice: '' });
+  const sp = useSearchParams();
+  const [f, setF] = useState({ q: sp.get('q') ?? '', categoryId: sp.get('categoryId') ?? '', regionId: '', sort: 'newest', delivery: '', verifiedOnly: '', availability: '', minPrice: '', maxPrice: '' });
   const [page, setPage] = useState(1);
   const cats = usePublicApi<Cat[]>('/catalog/categories');
   const regions = usePublicApi<any[]>('/catalog/regions');
@@ -40,12 +43,12 @@ function Catalog() {
             {list.data?.items.map((p) => (
               <li key={p.id}>
                 <Link href={`/catalog/${p.slug}`} className="card block overflow-hidden transition hover:-translate-y-0.5 hover:border-brand-300">
-                  <ProductImage id={p.imageId} alt={p.name} className="h-36 w-full" />
+                  <ProductImage id={p.imageId} alt={p.name} name={p.name} category={p.category.name} className="h-40 w-full" />
                   <div className="p-4">
                     <p className="text-xs text-ink-muted">{p.category.name}</p>
                     <h3 className="font-bold text-ink">{p.name}</h3>
                     {p.cheapest ? <p className="mt-2 text-lg font-extrabold text-brand-700">{money(p.cheapest.perBase)} <span className="text-xs font-medium text-ink-muted">/ {p.cheapest.baseUnit}</span></p> : <p className="mt-2 text-sm text-ink-muted">Hozircha narx yo‘q</p>}
-                    <div className="mt-1"><Badge tone="muted">{p.offersCount} ta taklif</Badge></div>
+                    <div className="mt-2 flex items-center justify-between"><Badge tone="muted">{p.offersCount} ta taklif</Badge><span className="inline-flex items-center gap-1 text-xs font-bold text-brand-700"><Icon name="scale" size={14} />Solishtirish</span></div>
                   </div>
                 </Link>
               </li>

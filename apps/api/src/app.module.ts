@@ -5,6 +5,7 @@ import { AdminModule } from './admin/admin.controller';
 import { AnalyticsModule } from './analytics/analytics.controller';
 import { BuyerModule } from './buyer/buyer.controller';
 import { CatalogModule } from './catalog/catalog.module';
+import { DashboardsModule } from './dashboards/dashboards.controller';
 import { ChatModule } from './chat/chat.controller';
 import { ContractsModule } from './contracts/contracts.module';
 import { FilesModule } from './files/files.controller';
@@ -41,6 +42,7 @@ import { UsersModule } from './users/me.controller';
     BuyerModule,
     AdminModule,
     AnalyticsModule,
+    DashboardsModule,
     MaintenanceModule,
   ],
   providers: [

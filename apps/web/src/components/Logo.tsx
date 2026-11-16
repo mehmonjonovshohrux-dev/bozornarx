@@ -49,20 +49,20 @@ export function BasketMark({ size = 40, animated = false, tone = 'color' }: { si
   );
 }
 
-export function Wordmark({ className = '' }: { className?: string }) {
+export function Wordmark({ className = '', light = false }: { className?: string; light?: boolean }) {
   return (
     <span className={`font-extrabold tracking-tight ${className}`}>
-      <span className="text-brand-700">Bozor</span>
+      <span className={light ? 'text-white' : 'text-brand-700'}>Bozor</span>
       <span className="text-accent-500">Narx</span>
     </span>
   );
 }
 
-export function Brand({ size = 36 }: { size?: number }) {
+export function Brand({ size = 36, light = false }: { size?: number; light?: boolean }) {
   return (
     <span className="inline-flex items-center gap-2.5">
       <BasketMark size={size} />
-      <Wordmark className="text-[22px]" />
+      <Wordmark className="text-[22px]" light={light} />
     </span>
   );
 }
