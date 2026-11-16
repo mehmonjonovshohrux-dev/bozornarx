@@ -4,5 +4,6 @@
 
 **Verified by running:** 56 domain tests, 12 Apps Script tests (pass).
 **Verified statically:** syntax of every file, import/export resolution, Prisma relation symmetry, Prisma delegate names, permission names.
-**NOT verified:** TypeScript type-checking, `prisma validate`, `next build`, any HTTP request, any database query. No network was available.
+**Verified on the owner's machine (2026-11-16):** `prisma validate`, API `tsc` build, `next build`.
+**NOT verified:** any HTTP request, any database query, migration applied to Supabase.
 **External, not connected (honestly reported as such):** E-IMZO, card payments, SMS. Push needs VAPID keys.

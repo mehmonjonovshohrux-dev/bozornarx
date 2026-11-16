@@ -27,7 +27,7 @@ export class AnalyticsService {
       where: { status: 'VERIFIED', deletedAt: null, lat: { not: null }, lng: { not: null }, ...(regionIds ? { regionId: { in: regionIds } } : {}), ...(q.q ? { name: { contains: q.q, mode: 'insensitive' } } : {}),
         ...(q.productId ? { priceRecords: { some: { productId: q.productId, deletedAt: null, moderationStatus: 'APPROVED' } } } : {}) },
       take: 500,
-      select: { id: true, name: true, slug: true, lat: true, lng: true, address: true, region: { select: { name: true } }, market: { select: { name: true } } },
+      select: { id: true, name: true, slug: true, lat: true, lng: true, region: { select: { name: true } }, market: { select: { name: true } } },
     });
     if (!q.productId) return { baseUnit: null, stores };
     const product = await this.prisma.product.findFirst({ where: { id: q.productId, deletedAt: null }, select: { unit: { select: { code: true } } } });

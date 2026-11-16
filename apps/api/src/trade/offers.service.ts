@@ -35,7 +35,8 @@ export class OffersService {
   }
 
   async list(user: AuthUser, q: PageQuery & { as: 'buyer' | 'seller'; status?: string }) {
-    const where = { ...(q.as === 'buyer' ? { buyerId: user.id } : { store: { ownerId: user.id } }), ...(q.status ? { status: q.status as 'PENDING' } : {}) };
+    const myStoreIds = q.as === 'buyer' ? [] : (await this.prisma.store.findMany({ where: { ownerId: user.id, deletedAt: null }, select: { id: true } })).map((s) => s.id);
+    const where = { ...(q.as === 'buyer' ? { buyerId: user.id } : { storeId: { in: myStoreIds } }), ...(q.status ? { status: q.status as 'PENDING' } : {}) };
     const [rows, total] = await Promise.all([this.prisma.offer.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (q.page - 1) * q.pageSize, take: q.pageSize }), this.prisma.offer.count({ where })]);
     const recs = await this.prisma.priceRecord.findMany({ where: { id: { in: rows.map((o) => o.priceRecordId) } }, include: { product: { select: { name: true, slug: true } }, unit: { select: { code: true } }, store: { select: { name: true } } } });
     const byId = new Map(recs.map((r) => [r.id, r]));
@@ -50,7 +51,8 @@ export class OffersService {
   }
 
   async respond(user: AuthUser, id: string, d: z.infer<typeof offerRespondSchema>) {
-    const o = await this.prisma.offer.findFirst({ where: { id, store: { ownerId: user.id } } });
+    const myStores = await this.prisma.store.findMany({ where: { ownerId: user.id, deletedAt: null }, select: { id: true } });
+    const o = await this.prisma.offer.findFirst({ where: { id, storeId: { in: myStores.map((s) => s.id) } } });
     if (!o) throw new AppError(404, 'NOT_FOUND', 'Taklif topilmadi.');
     if (o.status !== 'PENDING') throw new AppError(409, 'NOT_PENDING', 'Bu taklifga javob berilgan.');
     if (o.expiresAt < new Date()) {
