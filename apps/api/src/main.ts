@@ -23,6 +23,8 @@ async function bootstrap() {
   app.set('trust proxy', env.TRUST_PROXY); // Render terminates TLS in front of us, needed for correct client IPs
   app.useBodyParser('json', { limit: '9mb' }); // file uploads travel as base64 JSON (see files module)
   app.use(helmet());
+  // Account data must never be reused from a browser/proxy cache (another account on the same phone could otherwise see it). Routes that want caching (public images) set their own header after this.
+  app.use((_req: unknown, res: { setHeader: (k: string, v: string) => void }, next: () => void) => { res.setHeader('Cache-Control', 'no-store'); next(); });
   app.enableCors({
     origin: env.WEB_ORIGIN.split(',').map((s) => s.trim()).filter(Boolean),
     credentials: true,

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Module, Post, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Module, Post, Put, Query, Req, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
@@ -9,11 +9,13 @@ import { ZodPipe } from '../common/http';
 import { Me, Secured, idParam, pageSchema, paged, PageQuery } from '../common/util';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsHub } from './events.hub';
-import { NotificationsService } from './notifications.service';
+import { NOTIF_CATEGORIES, NotificationsService } from './notifications.service';
 
 const subSchema = z.object({ endpoint: z.string().url().max(1000), keys: z.object({ p256dh: z.string().min(10).max(300), auth: z.string().min(5).max(100) }) });
 const unsubSchema = z.object({ endpoint: z.string().url().max(1000) });
 const listQuery = pageSchema.extend({ unread: z.preprocess((v) => v === 'true', z.boolean()) });
+
+const prefsSchema = z.object({ category: z.enum(NOTIF_CATEGORIES), inApp: z.boolean(), phone: z.boolean() });
 
 @ApiTags('notifications')
 @Controller('notifications')
@@ -60,6 +62,25 @@ export class NotificationsController {
       clearInterval(ping);
       remove();
     });
+  }
+
+  @Get('prefs')
+  @Secured()
+  async prefs(@Me() u: AuthUser) {
+    const rows = await this.prisma.notificationPreference.findMany({ where: { userId: u.id } });
+    const by = new Map(rows.map((r) => [r.category, r]));
+    return NOTIF_CATEGORIES.map((c) => ({ category: c, inApp: by.get(c)?.inApp ?? true, phone: by.get(c)?.phone ?? true }));
+  }
+
+  @Put('prefs')
+  @Secured()
+  async setPrefs(@Me() u: AuthUser, @Body(new ZodPipe(prefsSchema)) b: z.infer<typeof prefsSchema>) {
+    await this.prisma.notificationPreference.upsert({
+      where: { userId_category: { userId: u.id, category: b.category } },
+      create: { userId: u.id, category: b.category, inApp: b.inApp, phone: b.phone },
+      update: { inApp: b.inApp, phone: b.phone },
+    });
+    return { saved: true };
   }
 
   @Get('push/config')

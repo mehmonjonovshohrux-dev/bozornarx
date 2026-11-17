@@ -213,6 +213,7 @@ model User {
   deletedAt       DateTime?
 
   profile            UserProfile?
+  notificationPrefs  NotificationPreference[]
   roles              UserRole[]
   emailVerifications EmailVerification[]
   phoneVerifications PhoneVerification[]
@@ -1134,4 +1135,17 @@ model OrderEvent {
   createdAt DateTime @default(now())
 
   @@index([orderId, createdAt])
+}
+
+// Per-user notification settings by category. No row = defaults (everything on).
+model NotificationPreference {
+  id       String  @id @default(uuid()) @db.Uuid
+  userId   String  @db.Uuid
+  category String // ORDERS, CONTRACTS, PRICES, CHAT, DISPUTES, SYSTEM
+  inApp    Boolean @default(true)
+  phone    Boolean @default(true)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category])
 }

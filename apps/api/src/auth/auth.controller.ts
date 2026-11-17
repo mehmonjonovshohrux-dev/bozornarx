@@ -15,6 +15,7 @@ import {
   ResetPasswordDto,
   VerifyEmailDto,
   emailOnlySchema,
+  changePasswordSchema,
   loginSchema,
   phoneSendSchema,
   phoneVerifySchema,
@@ -124,6 +125,16 @@ export class AuthController {
     await this.auth.logout(req.user.sessionId, req.user.id, this.ctx(req));
     res.clearCookie(COOKIE, { path: '/' });
     return { loggedOut: true };
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(200)
+  @Throttle({ default: { limit: 6, ttl: 60_000 } })
+  async changePassword(@Req() req: AuthedRequest, @Body(new ZodPipe(changePasswordSchema)) b: z.infer<typeof changePasswordSchema>) {
+    await this.auth.changePassword(req.user.id, req.user.sessionId, b.currentPassword, b.newPassword, this.ctx(req));
+    return { changed: true };
   }
 
   @Get('sessions')

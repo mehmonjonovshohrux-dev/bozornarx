@@ -52,7 +52,7 @@ async function send(path: string, method: string, body: unknown, withAuth: boole
     if (withAuth && accessToken) headers.authorization = `Bearer ${accessToken}`;
     let res: Response | null = null;
     try {
-      res = await fetch(`/api${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'same-origin' });
+      res = await fetch(`/api${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'same-origin', cache: 'no-store' });
     } catch {
       if (!retryNetwork || attempt >= WAKE_DELAYS.length) {
         if (woke) serverState('ok');
@@ -128,7 +128,7 @@ export interface Me {
   email: string;
   emailVerifiedAt: string | null;
   phone: string | null;
-  profile: { fullName: string; locale: string } | null;
+  profile: { fullName: string; locale: string; avatarUrl: string | null } | null;
   roles: string[];
   permissions: string[];
   createdAt: string;
@@ -164,6 +164,7 @@ export const authApi = {
   forgot: (email: string) => api<{ expiresInSec: number; resendAfterSec: number }>('/auth/forgot-password', { body: { email }, auth: false }),
   reset: (body: { email: string; code: string; newPassword: string }) => api<unknown>('/auth/reset-password', { body, auth: false }),
   me: () => api<Me>('/me'),
+  changePassword: (currentPassword: string, newPassword: string) => api<unknown>('/auth/change-password', { body: { currentPassword, newPassword } }),
   sessions: () => api<SessionInfo[]>('/auth/sessions'),
   revokeSession: (id: string) => api<unknown>(`/auth/sessions/${id}`, { method: 'DELETE' }),
 };

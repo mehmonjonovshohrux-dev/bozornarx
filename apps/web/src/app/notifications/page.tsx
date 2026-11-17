@@ -27,8 +27,24 @@ export default function Notifications() {
   );
 }
 
+const CAT: Record<string, [string, string]> = {
+  ORDERS: ['Buyurtmalar va takliflar', 'Yangi buyurtma, holat o‘zgarishi, takliflar'],
+  CONTRACTS: ['Shartnomalar', 'Imzo kutilmoqda, imzolandi, yangi versiya'],
+  PRICES: ['Narxlar', 'Narx tushdi, narx eskirdi'],
+  CHAT: ['Xabarlar', 'Yangi chat xabarlari'],
+  DISPUTES: ['Nizo va shikoyatlar', 'Nizo va shikoyat yangiliklari'],
+  SYSTEM: ['Tizim', 'Rol, tarif, moderatsiya natijalari'],
+};
+type Pref = { category: string; inApp: boolean; phone: boolean };
+
+function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
+  return <button type="button" role="switch" aria-checked={on} aria-label={label} className={`h-7 w-12 shrink-0 rounded-full p-0.5 transition ${on ? 'bg-brand-600' : 'bg-cream-300'}`} onClick={() => onChange(!on)}><span className={`block h-6 w-6 rounded-full bg-white shadow transition ${on ? 'translate-x-5' : ''}`} /></button>;
+}
+
 function PushSetting() {
-  const [state, setState] = useState<'unknown' | 'unsupported' | 'off' | 'on' | 'unconfigured'>('unknown');
+  const prefs = useApi<Pref[]>('/notifications/prefs');
+  const setPref = useAction(async (p: Pref) => { await api('/notifications/prefs', { method: 'PUT', body: p }); prefs.reload(); });
+  const [state, setState] = useState<'unknown' | 'unsupported' | 'off' | 'on' | 'unconfigured' | 'denied'>('unknown');
   useEffect(() => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) { setState('unsupported'); return; }
     navigator.serviceWorker.ready.then((r) => r.pushManager.getSubscription()).then((s) => setState(s ? 'on' : 'off')).catch(() => setState('unsupported'));
@@ -39,7 +55,7 @@ function PushSetting() {
     if (existing) { await api('/notifications/push/subscribe', { method: 'DELETE', body: { endpoint: existing.endpoint } }); await existing.unsubscribe(); setState('off'); return; }
     const cfg = await api<{ enabled: boolean; publicKey: string | null }>('/notifications/push/config', { auth: false });
     if (!cfg.enabled || !cfg.publicKey) { setState('unconfigured'); return; }
-    if ((await Notification.requestPermission()) !== 'granted') return;
+    if ((await Notification.requestPermission()) !== 'granted') { setState('denied'); return; }
     const key = Uint8Array.from(atob(cfg.publicKey.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
     const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
     const j = sub.toJSON();
@@ -47,11 +63,34 @@ function PushSetting() {
     setState('on');
   });
   return (
-    <section className="card mt-6 p-4"><h2 className="font-bold">Push bildirishnomalar</h2>
-      {state === 'unsupported' && <p className="mt-1 text-sm text-ink-muted">Bu brauzer push’ni qo‘llab-quvvatlamaydi. iPhone’da avval ilovani “Bosh ekranga qo‘shing”.</p>}
-      {state === 'unconfigured' && <p className="mt-1 text-sm text-warn">Server push kalitlari (VAPID) sozlanmagan, shuning uchun hozircha yoqib bo‘lmaydi.</p>}
-      {(state === 'on' || state === 'off') && <button className="btn btn-ghost mt-2" disabled={toggle.busy} onClick={() => void toggle.run()}>{state === 'on' ? 'Push’ni o‘chirish' : 'Push’ni yoqish'}</button>}
-      <ErrorBox error={toggle.error} />
+    <section className="card mt-6 space-y-4 p-4">
+      <div>
+        <h2 className="font-bold">Bildirishnoma sozlamalari</h2>
+        <p className="text-sm text-ink-muted">Yangi xabar kelganda telefonning yuqori qismida ogohlantirish chiqishi mumkin.</p>
+      </div>
+      <div className="rounded-xl bg-cream-100 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div><b className="block text-sm">Telefonda ogohlantirish</b><span className="text-xs text-ink-muted">Ilova yopiq bo‘lsa ham yuqorida ko‘rinadi</span></div>
+          {(state === 'on' || state === 'off') && <Switch on={state === 'on'} label="Telefonda ogohlantirish" onChange={() => void toggle.run()} />}
+        </div>
+        {state === 'unsupported' && <p className="mt-2 text-xs text-ink-muted">Bu qurilma buni qo‘llab-quvvatlamaydi. iPhone’da avval ilovani “Bosh ekranga qo‘shing”.</p>}
+        {state === 'unconfigured' && <p className="mt-2 text-xs text-amber-800">Server tomonida bu xizmat hali sozlanmagan, shuning uchun hozircha yoqib bo‘lmaydi.</p>}
+        {state === 'denied' && <p className="mt-2 text-xs text-amber-800">Ruxsat berilmadi. Telefon sozlamalaridan ilova uchun bildirishnomaga ruxsat bering.</p>}
+        <ErrorBox error={toggle.error} />
+      </div>
+      <div>
+        <div className="mb-1 grid grid-cols-[1fr_56px_56px] gap-2 px-1 text-xs font-semibold text-ink-muted"><span>Turkum</span><span className="text-center">Ilovada</span><span className="text-center">Telefonda</span></div>
+        <ul className="divide-y divide-cream-200">
+          {(prefs.data ?? []).map((p) => (
+            <li key={p.category} className="grid grid-cols-[1fr_56px_56px] items-center gap-2 py-2.5">
+              <span><b className="block text-sm">{CAT[p.category]?.[0] ?? p.category}</b><span className="text-xs text-ink-muted">{CAT[p.category]?.[1]}</span></span>
+              <span className="grid place-items-center"><Switch on={p.inApp} label={`${CAT[p.category]?.[0]}: ilovada`} onChange={(v) => void setPref.run({ ...p, inApp: v })} /></span>
+              <span className="grid place-items-center"><Switch on={p.phone} label={`${CAT[p.category]?.[0]}: telefonda`} onChange={(v) => void setPref.run({ ...p, phone: v })} /></span>
+            </li>
+          ))}
+        </ul>
+        <ErrorBox error={prefs.error ?? setPref.error} retry={prefs.reload} />
+      </div>
     </section>
   );
 }

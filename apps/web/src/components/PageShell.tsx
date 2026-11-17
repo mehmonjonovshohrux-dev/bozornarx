@@ -13,7 +13,7 @@ export function PageShell({ children }: { children: ReactNode }) {
   if (user) return <AppShell>{children}</AppShell>;
   return (
     <div className="min-h-[100dvh]">
-      <header className="sticky top-0 z-40 border-b border-cream-300 bg-cream-50/95 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-cream-300 bg-cream-50">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4">
           <Link href="/" aria-label="BozorNarx"><Brand /></Link>
           <nav className="flex items-center gap-2 text-sm font-semibold">

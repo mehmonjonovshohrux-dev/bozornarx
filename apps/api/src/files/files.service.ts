@@ -5,7 +5,7 @@ import { isStaff } from '../common/util';
 import { Role } from '../domain/permissions';
 import { PrismaService } from '../prisma/prisma.service';
 
-export type FileKind = 'PRODUCT_IMAGE' | 'CHAT' | 'EVIDENCE' | 'STORE_DOC' | 'CONTRACT_PDF' | 'DELIVERY_ACT';
+export type FileKind = 'AVATAR' | 'PRODUCT_IMAGE' | 'CHAT' | 'EVIDENCE' | 'STORE_DOC' | 'CONTRACT_PDF' | 'DELIVERY_ACT';
 
 const IMAGE_MAX = 5 * 1024 * 1024;
 const DOC_MAX = 8 * 1024 * 1024;
@@ -20,6 +20,7 @@ export function sniffMime(b: Buffer): string | null {
 }
 
 const ALLOWED: Record<FileKind, readonly string[]> = {
+  AVATAR: ['image/png', 'image/jpeg', 'image/webp'],
   PRODUCT_IMAGE: ['image/png', 'image/jpeg', 'image/webp'],
   CHAT: ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'],
   EVIDENCE: ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'],
