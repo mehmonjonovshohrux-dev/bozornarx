@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth-context';
 import { ROLE_LABEL } from '@/lib/fmt';
 import { openStream } from '@/lib/realtime';
 import { Brand } from './Logo';
+import { SetupPrompt } from './SetupPrompt';
 import { Icon } from './ui/Icon';
 import { Spinner } from './ui/kit';
 
@@ -210,6 +211,7 @@ export function AppShell({ children, wide }: { children: ReactNode; wide?: boole
           <div className="h-full w-72" onClick={(e) => e.stopPropagation()}>{sidebar}</div>
         </div>
       )}
+      <SetupPrompt />
       {toast && <div role="status" className="fixed bottom-24 left-1/2 z-[80] -translate-x-1/2 rounded-xl bg-ink px-4 py-3 text-sm text-white shadow-lg lg:bottom-6">{toast}</div>}
     </div>
   );

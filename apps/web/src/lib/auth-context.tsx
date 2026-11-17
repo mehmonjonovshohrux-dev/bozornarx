@@ -1,7 +1,7 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { authApi, refreshSession, type Me } from './api';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { authApi, lastRefreshFailure, refreshSession, type Me } from './api';
 import { clearApiCache } from './hooks';
 
 interface AuthState {
@@ -11,42 +11,55 @@ interface AuthState {
   logout: () => Promise<void>;
 }
 
+const ME_KEY = 'bn_me_v1';
+const readMe = (): Me | null => { try { const t = localStorage.getItem(ME_KEY); return t ? (JSON.parse(t) as Me) : null; } catch { return null; } };
+const writeMe = (m: Me | null) => { try { if (m) { localStorage.setItem(ME_KEY, JSON.stringify(m)); localStorage.setItem('bn_last_email', m.email); } else localStorage.removeItem(ME_KEY); } catch { /* ignore */ } };
+
 const Ctx = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
+  const uid = useRef<string | null>(null);
+
+  const apply = useCallback((me: Me | null) => {
+    if (uid.current !== (me?.id ?? null)) clearApiCache(); // a different account must never see the previous one's cached pages
+    uid.current = me?.id ?? null;
+    writeMe(me);
+    setUser(me);
+  }, []);
 
   const reload = useCallback(async () => {
     try {
-      const me = await authApi.me();
-      clearApiCache(); // a different account must never see the previous one's cached pages
-      setUser(me);
+      apply(await authApi.me());
     } catch {
-      setUser(null);
+      apply(null);
     }
-  }, []);
+  }, [apply]);
 
   useEffect(() => {
     let alive = true;
+    // Open instantly with the last known profile (the screen is drawn at once; the server still decides what is allowed),
+    // then confirm the session in the background. A sleeping/unreachable server must NOT sign the person out; only a real "no session" does.
+    const cached = readMe();
+    if (cached) { uid.current = cached.id; setUser(cached); setLoading(false); }
     (async () => {
-      // On every page load: trade the httpOnly refresh cookie for an access token, then load the profile.
       if (await refreshSession()) await reload();
+      else if (lastRefreshFailure() === 'denied' || !cached) apply(null);
       if (alive) setLoading(false);
     })();
     return () => {
       alive = false;
     };
-  }, [reload]);
+  }, [reload, apply]);
 
   const logout = useCallback(async () => {
     try {
       await authApi.logout();
     } finally {
-      clearApiCache();
-      setUser(null);
+      apply(null);
     }
-  }, []);
+  }, [apply]);
 
   const value = useMemo(() => ({ user, loading, reload, logout }), [user, loading, reload, logout]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

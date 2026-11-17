@@ -1,7 +1,7 @@
 /* BozorNarx service worker. Bump VERSION to roll out a new cache.
    Strategy: static assets (/_next/static, icons) cache-first; page navigations network-first with /offline fallback;
    /api/* is NEVER cached (private, always live data). */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const STATIC = `bn-static-${VERSION}`;
 const PAGES = `bn-pages-${VERSION}`;
 
@@ -27,7 +27,15 @@ self.addEventListener('fetch', (e) => {
   if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
 
   if (req.mode === 'navigate') {
-    e.respondWith(fetch(req).catch(() => caches.match('/offline').then((r) => r || Response.error())));
+    // Open fast: show the last copy of the page shell at once and refresh it in the background (pages carry no private data: that arrives via /api).
+    e.respondWith(
+      caches.open(PAGES).then(async (cache) => {
+        const hit = await cache.match(req);
+        const net = fetch(req).then((res) => { if (res.ok && res.type === 'basic' && !res.redirected) cache.put(req, res.clone()); return res; });
+        if (hit) { net.catch(() => {}); return hit; }
+        return net.catch(() => cache.match('/offline').then((r) => r || Response.error()));
+      }),
+    );
     return;
   }
   if (url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/icons/')) {
