@@ -21,6 +21,11 @@ if [ -n "${ADMIN_EMAIL:-}" ] && [ -n "${ADMIN_PASSWORD:-}" ]; then
   echo "[entrypoint] super admin: create, or sync the password from ADMIN_PASSWORD"
   node dist/scripts/create-admin.js || echo "[entrypoint] create-admin did not change anything (see message above)"
 fi
+# Demo accounts must always be able to sign in: this step is fast (seconds) and independent of the big demo seed below.
+if [ -n "${DEMO_PASSWORD:-}" ] && [ "${DEMO_CLEANUP:-}" != "yes" ]; then
+  echo "[entrypoint] ensuring demo accounts (demo.*@example.com) can sign in with DEMO_PASSWORD"
+  node dist/scripts/ensure-demo-accounts.js || echo "[entrypoint] ensure-demo-accounts failed (see message above)"
+fi
 # Background chain: prune (optional) -> demo seed (optional) -> demo cleanup (optional). The seed over a remote database takes many minutes
 # and must never delay the port (Render kills a deploy that does not open its port), so none of this blocks the API start.
 (
@@ -31,6 +36,10 @@ fi
   if [ "${DEMO_SEED:-}" = "yes" ] && [ -n "${DEMO_PASSWORD:-}" ]; then
     echo "[entrypoint] loading DEMO data (accounts demo.*@example.com)"
     ALLOW_DEMO_SEED=yes ALLOW_DEMO_IN_PRODUCTION=yes node dist/scripts/seed-demo.js && echo "[entrypoint] demo seed finished" || echo "[entrypoint] demo seed failed (see message above)"
+  fi
+  if [ "${DEMO_SEED:-}" = "yes" ] && [ -n "${DEMO_PASSWORD:-}" ] && [ "${DEMO_SIGNING:-}" = "enabled" ]; then
+    echo "[entrypoint] creating and signing DEMO contracts"
+    node dist/scripts/seed-demo-contracts.js || echo "[entrypoint] demo contracts failed (see message above)"
   fi
   if [ "${DEMO_CLEANUP:-}" = "yes" ]; then
     echo "[entrypoint] removing DEMO data"

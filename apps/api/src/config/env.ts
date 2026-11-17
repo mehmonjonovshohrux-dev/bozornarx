@@ -21,6 +21,8 @@ const schema = z
     VAPID_SUBJECT: z.string().optional(),
     EIMZO_MODE: z.enum(['disabled', 'enabled']).default('disabled'),
     EIMZO_API_URL: z.string().url().optional(),
+    // Demo-only simple e-signature (re-enter account password). Must stay 'disabled' for real contracts; use E-IMZO there.
+    DEMO_SIGNING: z.enum(['disabled', 'enabled']).default('disabled'),
     PAYMENT_PROVIDER_MODE: z.enum(['none']).default('none'),
     SWAGGER: z.enum(['true', 'false']).default('false'),
     TRUST_PROXY: z.coerce.number().int().min(0).default(1),

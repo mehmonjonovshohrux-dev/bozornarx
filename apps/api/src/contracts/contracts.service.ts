@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { randomInt } from 'node:crypto';
+import { createHmac, randomInt } from 'node:crypto';
+import { verify as argonVerify } from '@node-rs/argon2';
 import { z } from 'zod';
 import { AuditService } from '../audit/audit.service';
 import { AuthUser } from '../auth/guards';
@@ -12,7 +13,8 @@ import { ContractStatus, InvalidTransitionError, assertContractTransition } from
 import { StorageService } from '../files/files.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { contractCreateSchema, contractDecisionSchema, orderContractTermsSchema, signSchema, termsSchema } from './contracts.schemas';
+import { ENV, Env } from '../config/env';
+import { contractCreateSchema, contractDecisionSchema, demoSignSchema, orderContractTermsSchema, signSchema, termsSchema } from './contracts.schemas';
 import { EimzoService } from './eimzo.adapter';
 import { ContractBody, DeliveryActData, buildContractPdf, buildDeliveryActPdf } from './pdf';
 
@@ -40,6 +42,7 @@ export class ContractsService {
     private readonly eimzo: EimzoService,
     private readonly audit: AuditService,
     private readonly notif: NotificationsService,
+    @Inject(ENV) private readonly env: Env,
   ) {}
 
   // ───────────── helpers ─────────────
@@ -51,8 +54,11 @@ export class ContractsService {
 
   private async clausesFor(type: ContractTypeCode): Promise<{ name: string; clauses: Clause[] }> {
     const t = await this.prisma.contractTemplate.findFirst({ where: { type, active: true }, orderBy: { version: 'desc' } });
-    if (t) return { name: t.name, clauses: t.clauses as unknown as Clause[] };
-    return DEFAULT_TEMPLATES[type];
+    const base = t ? { name: t.name, clauses: t.clauses as unknown as Clause[] } : DEFAULT_TEMPLATES[type];
+    if (this.env.DEMO_SIGNING !== 'enabled') return base;
+    // Demo mode: the signature clause must describe what really happens (and what it is not), so the document never claims E-IMZO.
+    const demo: Clause = { title: 'Elektron imzo (DEMO rejimi)', text: 'Ushbu shartnoma BozorNarx sinov (demo) rejimida tuziladi. Har bir tomon o‘z shaxsiy hisobiga kirib, parolini qayta kiritish va shartlarga rozilik belgisini qo‘yish orqali shartnomani oddiy elektron imzo bilan tasdiqlaydi. Imzo vaqti, qurilma ma’lumoti va shartnoma fayli hashi (SHA-256) saqlanadi. Bu E-IMZO (elektron raqamli imzo) emas va sinov maqsadida qo‘llanadi; haqiqiy savdoda E-IMZO yoki tomonlarning yozma kelishuviga asoslangan imzo qo‘llanishi kerak.' };
+    return { name: base.name, clauses: base.clauses.some((c) => c.title === 'Elektron imzo') ? base.clauses.map((c) => (c.title === 'Elektron imzo' ? demo : c)) : [...base.clauses, demo] };
   }
 
   private async newNumber(): Promise<string> {
@@ -295,7 +301,7 @@ export class ContractsService {
     const { c, role } = await this.party(user, id);
     if (!role) throw new AppError(403, 'FORBIDDEN', 'Faqat tomonlar imzolaydi.');
     const v = await this.prisma.contractVersion.findFirstOrThrow({ where: { contractId: id }, orderBy: { version: 'desc' }, include: { signatures: { select: { partyRole: true } } } });
-    return { contractId: id, status: c.status, version: v.version, documentSha256: v.sha256, myRole: role, alreadySigned: v.signatures.some((s) => s.partyRole === role), eimzo: this.eimzo.status() };
+    return { contractId: id, status: c.status, version: v.version, documentSha256: v.sha256, myRole: role, alreadySigned: v.signatures.some((s) => s.partyRole === role), eimzo: this.eimzo.status(), demoSigning: this.env.DEMO_SIGNING === 'enabled' };
   }
 
   async sign(user: AuthUser, id: string, d: z.infer<typeof signSchema>) {
@@ -317,9 +323,26 @@ export class ContractsService {
     }
     if (check.certValidTo && check.certValidTo < new Date()) throw new AppError(400, 'CERTIFICATE_EXPIRED', 'Imzo sertifikati muddati tugagan.');
 
+    await this.commitSignature(user, c, role, v, {
+      signatureBlob: Buffer.from(d.pkcs7Base64, 'base64'), provider: 'EIMZO', certSerial: check.certSerial, certSubject: check.certSubject, certValidFrom: check.certValidFrom, certValidTo: check.certValidTo, timestampToken: check.timestampToken, verificationDetail: (check.detail ?? {}) as Prisma.InputJsonValue,
+    });
+    await this.audit.record({ actorId: user.id, action: 'CONTRACT_SIGN', entityType: 'contract', entityId: id, after: { role, version: v.version } });
+    const after = await this.prisma.contract.findUniqueOrThrow({ where: { id }, select: { status: true } });
+    await this.notifyParties(id, after.status === 'ACTIVE' ? 'signed' : 'waiting', user.id);
+    return { status: after.status };
+  }
+
+  private async commitSignature(
+    user: AuthUser,
+    c: { id: string; status: string },
+    role: 'BUYER' | 'SELLER',
+    v: { id: string; version: number; sha256: string; signatures: unknown[] },
+    sig: { signatureBlob: Buffer; provider: 'EIMZO' | 'DEMO_SIMPLE'; certSerial?: string | null; certSubject?: string | null; certValidFrom?: Date | null; certValidTo?: Date | null; timestampToken?: Buffer | null; verificationDetail: Prisma.InputJsonValue },
+  ) {
+    const id = c.id;
     await this.prisma.$transaction(async (tx) => {
       await tx.contractSignature.create({
-        data: { contractId: id, versionId: v.id, signerId: user.id, partyRole: role, signedDocSha256: v.sha256, signatureBlob: Buffer.from(d.pkcs7Base64, 'base64'), certSerial: check.certSerial, certSubject: check.certSubject, certValidFrom: check.certValidFrom, certValidTo: check.certValidTo, timestampToken: check.timestampToken, verification: 'VALID', verificationDetail: (check.detail ?? {}) as Prisma.InputJsonValue, verifiedAt: new Date() },
+        data: { contractId: id, versionId: v.id, signerId: user.id, partyRole: role, provider: sig.provider, signedDocSha256: v.sha256, signatureBlob: sig.signatureBlob, certSerial: sig.certSerial ?? undefined, certSubject: sig.certSubject ?? undefined, certValidFrom: sig.certValidFrom ?? undefined, certValidTo: sig.certValidTo ?? undefined, timestampToken: sig.timestampToken ?? undefined, verification: 'VALID', verificationDetail: sig.verificationDetail, verifiedAt: new Date() },
       });
       const count = v.signatures.length + 1;
       let status = c.status as ContractStatus;
@@ -333,9 +356,40 @@ export class ContractsService {
         status = 'ACTIVE';
       }
       await tx.contract.update({ where: { id }, data: { status, ...(count >= 2 ? { signedAt: new Date() } : {}) } });
-      await this.event(tx, id, user.id, 'SIGNED', { role, version: v.version, certSerial: check.certSerial ?? null });
+      await this.event(tx, id, user.id, 'SIGNED', { role, version: v.version, provider: sig.provider, certSerial: sig.certSerial ?? null });
     });
-    await this.audit.record({ actorId: user.id, action: 'CONTRACT_SIGN', entityType: 'contract', entityId: id, after: { role, version: v.version } });
+  }
+
+  /**
+   * DEMO simple electronic signature. Each person signs for themselves: they must re-enter their own account password (identity check)
+   * and tick the consent box. We store who, when, from which device/IP, and an HMAC receipt over (contract, version, signer, role, document hash, time).
+   * It is clearly labelled DEMO_SIMPLE everywhere and is NOT an E-IMZO (qualified) signature. Only works when DEMO_SIGNING=enabled.
+   */
+  async signDemo(user: AuthUser, id: string, d: z.infer<typeof demoSignSchema>, ctx: { ip?: string; userAgent?: string }) {
+    if (this.env.DEMO_SIGNING !== 'enabled') throw new AppError(503, 'DEMO_SIGNING_DISABLED', 'Demo imzo yoqilmagan.');
+    const { c, role } = await this.party(user, id);
+    if (!role) throw new AppError(403, 'FORBIDDEN', 'Faqat tomonlar imzolaydi.');
+    if (!WAITING.includes(c.status as ContractStatus)) throw new AppError(409, 'NOT_SIGNABLE', 'Shartnoma hozir imzolash holatida emas.');
+    const v = await this.prisma.contractVersion.findFirstOrThrow({ where: { contractId: id }, orderBy: { version: 'desc' }, include: { signatures: true } });
+    if (v.signatures.some((s) => s.partyRole === role)) throw new AppError(409, 'ALREADY_SIGNED', 'Siz bu versiyani allaqachon imzolagansiz.');
+    const file = v.pdfKey ? await this.storage.get(v.pdfKey) : null;
+    if (!file) throw new AppError(500, 'DOCUMENT_MISSING', 'Shartnoma PDF fayli topilmadi.');
+    if (file.sha256 !== v.sha256) throw new AppError(500, 'DOCUMENT_TAMPERED', 'Shartnoma fayli hash mos kelmadi. Imzolash to‘xtatildi.');
+
+    const me = await this.prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { passwordHash: true, email: true, profile: { select: { fullName: true } } } });
+    const okPass = await argonVerify(me.passwordHash, d.password).catch(() => false);
+    if (!okPass) {
+      await this.prisma.contractEvent.create({ data: { contractId: id, actorId: user.id, type: 'SIGN_REJECTED', data: { role, reason: 'wrong_password' } } });
+      throw new AppError(400, 'WRONG_PASSWORD', 'Parol noto‘g‘ri. Imzo qo‘yilmadi.');
+    }
+    const signedAt = new Date();
+    const receipt = createHmac('sha256', createHmac('sha256', process.env.JWT_ACCESS_SECRET ?? '').update('demo-sign-v1').digest())
+      .update([id, v.id, user.id, role, v.sha256, signedAt.toISOString()].join('|')).digest();
+    await this.commitSignature(user, c, role, v, {
+      signatureBlob: receipt, provider: 'DEMO_SIMPLE', certSubject: `${me.profile?.fullName ?? me.email} <${me.email}>`,
+      verificationDetail: { level: 'DEMO_SIMPLE', method: 'account_password_reenter', consent: true, signedAt: signedAt.toISOString(), ip: ctx.ip ?? null, userAgent: (ctx.userAgent ?? '').slice(0, 200), receiptHmacSha256: receipt.toString('hex'), notEimzo: true },
+    });
+    await this.audit.record({ actorId: user.id, action: 'CONTRACT_SIGN', entityType: 'contract', entityId: id, after: { role, version: v.version, provider: 'DEMO_SIMPLE' } });
     const after = await this.prisma.contract.findUniqueOrThrow({ where: { id }, select: { status: true } });
     await this.notifyParties(id, after.status === 'ACTIVE' ? 'signed' : 'waiting', user.id);
     return { status: after.status };
@@ -344,8 +398,9 @@ export class ContractsService {
   // ───────────── reading ─────────────
 
   async list(user: AuthUser, q: PageQuery & { as: 'buyer' | 'seller'; status?: ContractStatus; archive: boolean }) {
+    const staff = isStaff(user.roles); // moderators and Super Admin oversee every contract (read-only; they are never a party)
     const where: Prisma.ContractWhereInput = {
-      ...(q.as === 'buyer' ? { buyerId: user.id } : { sellerStore: { ownerId: user.id } }),
+      ...(staff ? {} : q.as === 'buyer' ? { buyerId: user.id } : { sellerStore: { ownerId: user.id } }),
       ...(q.archive ? { status: { in: ['FULLY_SIGNED', 'ACTIVE', 'COMPLETED'] as ContractStatus[] } } : q.status ? { status: q.status } : {}),
     };
     const [rows, total] = await Promise.all([

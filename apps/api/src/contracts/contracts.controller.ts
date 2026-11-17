@@ -1,13 +1,14 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags } from '@nestjs/swagger';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { AuthUser } from '../auth/guards';
 import { ZodPipe } from '../common/http';
 import { Me, PageQuery, Secured, idParam } from '../common/util';
 import { ContractStatus } from '../domain/state-machines';
 import {
-  contractCreateSchema, contractDecisionSchema, contractListQuery, contractTermsUpdateSchema, disputeCreateSchema, disputeListQuery, disputeNoteSchema, disputeResolveSchema,
+  contractCreateSchema, contractDecisionSchema, contractListQuery, demoSignSchema, contractTermsUpdateSchema, disputeCreateSchema, disputeListQuery, disputeNoteSchema, disputeResolveSchema,
   orderContractTermsSchema, queueQuery, reasonSchema, signSchema, versionQuery,
 } from './contracts.schemas';
 import { ContractsService } from './contracts.service';
@@ -29,7 +30,7 @@ export class ContractsController {
   @Get('eimzo/status') eimzo() { return this.contracts.eimzoStatus(); }
 
   @Post() @Secured('contracts.create') create(@Me() u: AuthUser, @Body(new ZodPipe(contractCreateSchema)) b: z.infer<typeof contractCreateSchema>) { return this.contracts.createManual(u, b); }
-  @Get() @Secured('contracts.create') list(@Me() u: AuthUser, @Query(new ZodPipe(contractListQuery)) q: PageQuery & { as: 'buyer' | 'seller'; status?: ContractStatus; archive: boolean }) { return this.contracts.list(u, q); }
+  @Get() @Secured() list(@Me() u: AuthUser, @Query(new ZodPipe(contractListQuery)) q: PageQuery & { as: 'buyer' | 'seller'; status?: ContractStatus; archive: boolean }) { return this.contracts.list(u, q); }
   @Get('by-order/:id') @Secured('contracts.create') byOrder(@Me() u: AuthUser, @Param(id) p: Id) { return this.contracts.forOrder(u, p.id); }
   @Get(':id') @Secured() detail(@Me() u: AuthUser, @Param(id) p: Id) { return this.contracts.detail(u, p.id); }
   @Get(':id/pdf') @Secured()
@@ -37,6 +38,9 @@ export class ContractsController {
   @Get(':id/bundle') @Secured() bundle(@Me() u: AuthUser, @Param(id) p: Id) { return this.contracts.bundle(u, p.id); }
   @Get(':id/signing-info') @Secured('contracts.sign') info(@Me() u: AuthUser, @Param(id) p: Id) { return this.contracts.signingInfo(u, p.id); }
   @Post(':id/sign') @Secured('contracts.sign') sign(@Me() u: AuthUser, @Param(id) p: Id, @Body(new ZodPipe(signSchema)) b: z.infer<typeof signSchema>) { return this.contracts.sign(u, p.id, b); }
+
+  @Post(':id/sign-demo') @Secured('contracts.sign') @Throttle({ default: { limit: 8, ttl: 60_000 } })
+  signDemo(@Me() u: AuthUser, @Param(id) p: Id, @Body(new ZodPipe(demoSignSchema)) b: z.infer<typeof demoSignSchema>, @Req() req: Request) { return this.contracts.signDemo(u, p.id, b, { ip: req.ip, userAgent: req.headers['user-agent'] }); }
 
   @Patch(':id/terms') @Secured('contracts.create') terms(@Me() u: AuthUser, @Param(id) p: Id, @Body(new ZodPipe(contractTermsUpdateSchema)) b: z.infer<typeof contractTermsUpdateSchema>) { return this.contracts.updateTerms(u, p.id, b.terms); }
   @Patch(':id/order-terms') @Secured('contracts.create') orderTerms(@Me() u: AuthUser, @Param(id) p: Id, @Body(new ZodPipe(orderContractTermsSchema)) b: z.infer<typeof orderContractTermsSchema>) { return this.contracts.updateOrderContract(u, p.id, b); }

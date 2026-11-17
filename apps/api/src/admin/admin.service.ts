@@ -30,6 +30,34 @@ export class AdminService {
     return paged(rows.map((u) => ({ id: u.id, email: u.email, phone: u.phone, status: u.status, verified: !!u.emailVerifiedAt, fullName: u.profile?.fullName ?? null, roles: u.roles.map((r) => r.role.name), createdAt: u.createdAt })), total, q);
   }
 
+  /** Read-only overviews for the admin dashboard drill-down (stat card -> list -> detail). */
+  async allStores(q: PageQuery & { status?: string; q?: string }) {
+    const where: Prisma.StoreWhereInput = { deletedAt: null, ...(q.status ? { status: q.status as 'VERIFIED' } : {}), ...(q.q ? { name: { contains: q.q, mode: 'insensitive' } } : {}) };
+    const [rows, total] = await Promise.all([
+      this.prisma.store.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (q.page - 1) * q.pageSize, take: q.pageSize, select: { id: true, name: true, slug: true, status: true, createdAt: true, owner: { select: { email: true, profile: { select: { fullName: true } } } }, region: { select: { name: true } }, _count: { select: { orders: true } } } }),
+      this.prisma.store.count({ where }),
+    ]);
+    return paged(rows.map((s) => ({ id: s.id, name: s.name, slug: s.slug, status: s.status, createdAt: s.createdAt, owner: s.owner.profile?.fullName ?? s.owner.email, region: s.region?.name ?? null, orders: s._count.orders })), total, q);
+  }
+
+  async allProducts(q: PageQuery & { status?: string; q?: string }) {
+    const where: Prisma.ProductWhereInput = { deletedAt: null, ...(q.status ? { status: q.status as 'APPROVED' } : {}), ...(q.q ? { name: { contains: q.q, mode: 'insensitive' } } : {}) };
+    const [rows, total] = await Promise.all([
+      this.prisma.product.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (q.page - 1) * q.pageSize, take: q.pageSize, select: { id: true, name: true, slug: true, status: true, createdAt: true, category: { select: { name: true } } } }),
+      this.prisma.product.count({ where }),
+    ]);
+    return paged(rows.map((p) => ({ id: p.id, name: p.name, slug: p.slug, status: p.status, createdAt: p.createdAt, category: p.category?.name ?? null })), total, q);
+  }
+
+  async allOrders(q: PageQuery & { status?: string; q?: string }) {
+    const where: Prisma.OrderWhereInput = { ...(q.status ? { status: q.status as 'CREATED' } : {}), ...(q.q ? { number: { contains: q.q.toUpperCase() } } : {}) };
+    const [rows, total] = await Promise.all([
+      this.prisma.order.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (q.page - 1) * q.pageSize, take: q.pageSize, select: { id: true, number: true, status: true, totalAmount: true, createdAt: true, store: { select: { name: true } }, buyer: { select: { email: true, profile: { select: { fullName: true } } } } } }),
+      this.prisma.order.count({ where }),
+    ]);
+    return paged(rows.map((o) => ({ id: o.id, number: o.number, status: o.status, totalAmount: num(o.totalAmount), createdAt: o.createdAt, store: o.store.name, buyer: o.buyer.profile?.fullName ?? o.buyer.email })), total, q);
+  }
+
   async userDetail(id: string) {
     const u = await this.prisma.user.findUnique({ where: { id }, include: { profile: true, roles: { select: { role: { select: { name: true } } } } } });
     if (!u) throw new AppError(404, 'NOT_FOUND', 'Foydalanuvchi topilmadi.');
@@ -39,7 +67,11 @@ export class AdminService {
       this.prisma.session.count({ where: { userId: id, revokedAt: null, expiresAt: { gt: new Date() } } }),
       this.prisma.complaint.count({ where: { targetType: 'USER', targetId: id } }),
     ]);
-    return { id: u.id, email: u.email, phone: u.phone, status: u.status, verified: !!u.emailVerifiedAt, fullName: u.profile?.fullName ?? null, roles: u.roles.map((r) => r.role.name), createdAt: u.createdAt, stores, orders, activeSessions: sessions, complaintsAgainst: complaints };
+    const [recentOrders, contracts] = await Promise.all([
+      this.prisma.order.findMany({ where: { OR: [{ buyerId: id }, { store: { ownerId: id } }] }, orderBy: { createdAt: 'desc' }, take: 5, select: { id: true, number: true, status: true, totalAmount: true, createdAt: true } }),
+      this.prisma.contract.count({ where: { OR: [{ buyerId: id }, { sellerStore: { ownerId: id } }] } }),
+    ]);
+    return { id: u.id, email: u.email, phone: u.phone, status: u.status, verified: !!u.emailVerifiedAt, fullName: u.profile?.fullName ?? null, roles: u.roles.map((r) => r.role.name), createdAt: u.createdAt, stores, orders, contracts, recentOrders: recentOrders.map((o) => ({ ...o, totalAmount: num(o.totalAmount) })), activeSessions: sessions, complaintsAgainst: complaints };
   }
 
   async setStatus(actor: AuthUser, id: string, status: 'ACTIVE' | 'SUSPENDED', reason: string) {

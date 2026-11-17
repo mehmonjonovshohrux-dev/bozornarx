@@ -137,7 +137,7 @@ export default function RegisterPage() {
 
             <label className="flex items-start gap-3 text-sm text-ink-soft">
               <input type="checkbox" className="mt-0.5 h-5 w-5 accent-[#047857]" {...register('acceptTerms')} />
-              <span>Foydalanish shartlari va maxfiylik siyosatiga roziman.</span>
+              <span><Link href="/terms" target="_blank" className="font-semibold text-brand-700">Foydalanish shartlari</Link> va <Link href="/privacy" target="_blank" className="font-semibold text-brand-700">maxfiylik siyosati</Link>ga, shaxsiy ma’lumotlarim shu hujjatda ko‘rsatilgan maqsadlarda qayta ishlanishiga roziman.</span>
             </label>
             <FieldError message={errors.acceptTerms?.message} />
 

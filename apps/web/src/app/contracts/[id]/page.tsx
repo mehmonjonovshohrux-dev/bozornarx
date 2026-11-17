@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { CONTRACT_STATUS, dt, money } from '@/lib/fmt';
 import { useAction, useApi } from '@/lib/hooks';
 import { TermsForm } from '@/components/TermsForm';
+import { PasswordInput } from '@/components/PasswordInput';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export default function ContractPage() {
@@ -65,14 +66,26 @@ export default function ContractPage() {
 
 function SignModal({ open, id, info, onClose }: { open: boolean; id: string; info: any; onClose: () => void }) {
   const [pkcs7, setP] = useState('');
+  const [pw, setPw] = useState('');
+  const [agree, setAgree] = useState(false);
   const go = useAction(async () => { await api(`/contracts/${id}/sign`, { body: { pkcs7Base64: pkcs7.trim() } }); onClose(); });
+  const demo = useAction(async () => { await api(`/contracts/${id}/sign-demo`, { body: { password: pw, agree: true } }); setPw(''); setAgree(false); onClose(); });
   const ok = info.eimzo.configured;
   return (
-    <Modal open={open} title="Elektron imzo (E-IMZO)" onClose={onClose}>
+    <Modal open={open} title={ok ? 'Elektron imzo (E-IMZO)' : 'Shartnomani imzolash'} onClose={onClose}>
       <p className="mb-3 text-sm text-ink-soft">Imzolanadigan hujjat SHA-256: <span className="break-all font-mono text-xs">{info.documentSha256}</span></p>
-      {!ok ? <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{info.eimzo.message} Imzo qo‘lda “imzolangan” deb belgilanmaydi.</p> : (
+      {ok ? (
         <div className="space-y-3"><Field label="PKCS#7 imzo (Base64)" hint="E-IMZO dasturi bilan hujjat PDF’i imzolangandan keyingi natija."><textarea className="input font-mono text-xs" rows={5} value={pkcs7} onChange={(e) => setP(e.target.value)} /></Field>
-          <ErrorBox error={go.error} /><button className="btn btn-primary w-full" disabled={go.busy || pkcs7.trim().length < 100} onClick={() => void go.run()}>Imzoni yuborish</button></div>)}
+          <ErrorBox error={go.error} /><button className="btn btn-primary w-full" disabled={go.busy || pkcs7.trim().length < 100} onClick={() => void go.run()}>Imzoni yuborish</button></div>
+      ) : info.demoSigning ? (
+        <div className="space-y-3">
+          <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">DEMO rejimi: bu oddiy elektron imzo (hisob parolini qayta kiritish). U E-IMZO emas. Har bir tomon faqat o‘z hisobidan, o‘zi imzolaydi.</p>
+          <Field label="Parolingizni qayta kiriting (shaxsingizni tasdiqlash)"><PasswordInput className="input" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} /></Field>
+          <label className="flex items-start gap-3 text-sm text-ink-soft"><input type="checkbox" className="mt-0.5 h-5 w-5 accent-[#047857]" checked={agree} onChange={(e) => setAgree(e.target.checked)} /><span>Shartnoma matni bilan tanishdim va shartlariga roziman. Bu mening shaxsiy imzom ekanini tasdiqlayman. (<Link href="/terms" className="font-semibold text-brand-700" target="_blank">Foydalanish shartlari</Link>)</span></label>
+          <ErrorBox error={demo.error} />
+          <button className="btn btn-primary w-full" disabled={demo.busy || !agree || pw.length < 1} onClick={() => void demo.run()}>✍️ Shaxsan imzolayman</button>
+        </div>
+      ) : <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{info.eimzo.message} Imzo qo‘lda “imzolangan” deb belgilanmaydi.</p>}
     </Modal>
   );
 }

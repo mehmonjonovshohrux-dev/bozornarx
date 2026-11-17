@@ -11,7 +11,7 @@ import { Me, PageQuery, Secured, idParam } from '../common/util';
 import { AdminService } from './admin.service';
 import {
   SettingKey, auditQuery, complaintListQuery, complaintUpdateSchema, marketSchema, planSchema, regionSchema, reviewDecisionSchema, reviewQueueQuery,
-  roleChangeSchema, settingKeySchema, subscriptionSchema, userListQuery, userStatusSchema,
+  listStatusQuery, roleChangeSchema, settingKeySchema, subscriptionSchema, userListQuery, userStatusSchema,
 } from './admin.schemas';
 
 const id = new ZodPipe(idParam);
@@ -27,6 +27,9 @@ export class AdminController {
   constructor(private readonly admin: AdminService) {}
 
   @Get('users') @Secured('users.manage') users(@Query(new ZodPipe(userListQuery)) q: PageQuery & { q?: string; role?: string; status?: string }) { return this.admin.users(q); }
+  @Get('overview/stores') @Secured('stats.view') allStores(@Query(new ZodPipe(listStatusQuery)) q: PageQuery & { status?: string; q?: string }) { return this.admin.allStores(q); }
+  @Get('overview/products') @Secured('stats.view') allProducts(@Query(new ZodPipe(listStatusQuery)) q: PageQuery & { status?: string; q?: string }) { return this.admin.allProducts(q); }
+  @Get('overview/orders') @Secured('stats.view') allOrders(@Query(new ZodPipe(listStatusQuery)) q: PageQuery & { status?: string; q?: string }) { return this.admin.allOrders(q); }
   @Get('users/:id') @Secured('users.manage') user(@Param(id) p: Id) { return this.admin.userDetail(p.id); }
   @Post('users/:id/status') @Secured('users.manage') status(@Me() u: AuthUser, @Param(id) p: Id, @Body(new ZodPipe(userStatusSchema)) b: z.infer<typeof userStatusSchema>) { return this.admin.setStatus(u, p.id, b.status, b.reason); }
   @Post('users/:id/roles') @Secured('users.manage') role(@Me() u: AuthUser, @Param(id) p: Id, @Body(new ZodPipe(roleChangeSchema)) b: z.infer<typeof roleChangeSchema>) { return this.admin.changeRole(u, p.id, b); }

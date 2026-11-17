@@ -1,37 +1,86 @@
 'use client';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { Badge, ErrorBox, Field, Modal, PageTitle, Pager, Spinner, Stat, Table, Tabs, statusTone } from '@/components/ui/kit';
 import { api } from '@/lib/api';
-import { ROLE_LABEL, dt, money } from '@/lib/fmt';
+import { ORDER_STATUS, ROLE_LABEL, dt, money } from '@/lib/fmt';
 import { qs, useAction, useApi, usePublicApi, type Paged } from '@/lib/hooks';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-type T = 'stats' | 'users' | 'payments' | 'plans' | 'settings' | 'audit' | 'templates' | 'catalog';
+type T = 'stats' | 'stores' | 'products' | 'orders' | 'users' | 'payments' | 'plans' | 'settings' | 'audit' | 'templates' | 'catalog';
+type Pre = { role?: string; status?: string };
 export default function Admin() {
-  const [tab, setTab] = useState<T>('stats');
+  const [tab, setTab] = useState<T>('stats'); const [pre, setPre] = useState<Pre>({}); const [n, setN] = useState(0);
+  const go = (t: T, p: Pre = {}) => { setPre(p); setN((x) => x + 1); setTab(t); };
   return (
     <AppShell><PageTitle title="Admin panel" />
-      <Tabs<T> tabs={[{ id: 'stats', label: 'Statistika' }, { id: 'users', label: 'Foydalanuvchilar' }, { id: 'payments', label: 'To‘lovlar' }, { id: 'plans', label: 'Tariflar' }, { id: 'settings', label: 'Sozlamalar' }, { id: 'audit', label: 'Audit jurnali' }, { id: 'templates', label: 'Shablonlar' }, { id: 'catalog', label: 'Hudud/Kategoriya' }]} value={tab} onChange={setTab} />
-      {tab === 'stats' && <Stats />}{tab === 'users' && <Users />}{tab === 'payments' && <Payments />}{tab === 'plans' && <Plans />}{tab === 'settings' && <Settings />}{tab === 'audit' && <Audit />}{tab === 'templates' && <Templates />}{tab === 'catalog' && <CatalogAdmin />}
+      <Tabs<T> tabs={[{ id: 'stats', label: 'Statistika' }, { id: 'users', label: 'Foydalanuvchilar' }, { id: 'stores', label: 'Do‘konlar' }, { id: 'products', label: 'Mahsulotlar' }, { id: 'orders', label: 'Buyurtmalar' }, { id: 'payments', label: 'To‘lovlar' }, { id: 'plans', label: 'Tariflar' }, { id: 'settings', label: 'Sozlamalar' }, { id: 'audit', label: 'Audit jurnali' }, { id: 'templates', label: 'Shablonlar' }, { id: 'catalog', label: 'Hudud/Kategoriya' }]} value={tab} onChange={(t) => go(t)} />
+      {tab === 'stats' && <Stats go={go} />}{tab === 'users' && <Users key={n} pre={pre} />}{tab === 'stores' && <Stores key={n} pre={pre} />}{tab === 'products' && <Products key={n} pre={pre} />}{tab === 'orders' && <Orders key={n} pre={pre} />}
+      {tab === 'payments' && <Payments />}{tab === 'plans' && <Plans />}{tab === 'settings' && <Settings />}{tab === 'audit' && <Audit />}{tab === 'templates' && <Templates />}{tab === 'catalog' && <CatalogAdmin />}
     </AppShell>
   );
 }
 
 const sum = (o: Record<string, number> | undefined) => Object.values(o ?? {}).reduce((a, b) => a + b, 0);
-function Stats() {
-  const q = useApi<any>('/admin/stats');
+function Stats({ go }: { go: (t: T, p?: Pre) => void }) {
+  const q = useApi<any>('/admin/stats'); const r = useRouter();
   if (q.loading) return <Spinner />; if (q.error) return <ErrorBox error={q.error} retry={q.reload} />;
   const d = q.data;
   return (<div className="space-y-4">
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4"><Stat label="Faol foydalanuvchilar" value={d.users.active} /><Stat label="Do‘konlar" value={sum(d.stores)} sub={`tasdiqlangan ${d.stores.VERIFIED ?? 0}`} /><Stat label="Mahsulotlar" value={sum(d.products)} sub={`tasdiqlangan ${d.products.APPROVED ?? 0}`} /><Stat label="Faol narxlar" value={d.livePrices} />
-      <Stat label="30 kunda buyurtma" value={sum(d.orders30d)} /><Stat label="30 kunlik hajm" value={money(d.volume30d)} sub={`${d.completed30d} bitim`} /><Stat label="Shartnomalar" value={sum(d.contracts)} sub={`imzolangan ${(d.contracts.FULLY_SIGNED ?? 0) + (d.contracts.ACTIVE ?? 0) + (d.contracts.COMPLETED ?? 0)}`} /><Stat label="Ochiq nizo / shikoyat" value={`${d.openDisputes} / ${d.openComplaints}`} tone="accent" /></div>
-    <div className="card p-4"><h3 className="mb-2 font-bold">Rollar bo‘yicha</h3><div className="flex flex-wrap gap-2">{Object.entries(d.users.byRole).map(([r, n]) => <Badge key={r}>{ROLE_LABEL[r] ?? r}: {String(n)}</Badge>)}</div>
-      <h3 className="mb-2 mt-4 font-bold">Moderatsiya navbatlari</h3><div className="flex flex-wrap gap-2">{Object.entries(d.queues).map(([k, n]) => <Badge key={k} tone={n ? 'warn' : 'muted'}>{k}: {String(n)}</Badge>)}</div></div></div>);
+    <p className="text-xs text-ink-muted">Har bir raqamni bosing: ro‘yxat ochiladi, ro‘yxatdagi elementni bossangiz tafsilotlari chiqadi.</p>
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <Stat label="Faol foydalanuvchilar" value={d.users.active} onClick={() => go('users', { status: 'ACTIVE' })} />
+      <Stat label="Do‘konlar" value={sum(d.stores)} sub={`tasdiqlangan ${d.stores.VERIFIED ?? 0}`} onClick={() => go('stores')} />
+      <Stat label="Mahsulotlar" value={sum(d.products)} sub={`tasdiqlangan ${d.products.APPROVED ?? 0}`} onClick={() => go('products')} />
+      <Stat label="Faol narxlar" value={d.livePrices} onClick={() => r.push('/catalog')} />
+      <Stat label="30 kunda buyurtma" value={sum(d.orders30d)} onClick={() => go('orders')} />
+      <Stat label="30 kunlik hajm" value={money(d.volume30d)} sub={`${d.completed30d} bitim`} onClick={() => go('orders', { status: 'COMPLETED' })} />
+      <Stat label="Shartnomalar" value={sum(d.contracts)} sub={`imzolangan ${(d.contracts.FULLY_SIGNED ?? 0) + (d.contracts.ACTIVE ?? 0) + (d.contracts.COMPLETED ?? 0)}`} onClick={() => r.push('/contracts')} />
+      <Stat label="Ochiq nizolar" value={d.openDisputes} onClick={() => r.push('/disputes')} />
+      <Stat label="Ochiq shikoyatlar" value={d.openComplaints} onClick={() => r.push('/moderation')} />
+    </div>
+    <div className="card p-4"><h3 className="mb-2 font-bold">Rollar bo‘yicha</h3><div className="flex flex-wrap gap-2">{Object.entries(d.users.byRole).map(([k, n]) => <button key={k} type="button" onClick={() => go('users', { role: k })} className="rounded-full focus-visible:outline focus-visible:outline-2"><Badge>{ROLE_LABEL[k] ?? k}: {String(n)} ›</Badge></button>)}</div>
+      <h3 className="mb-2 mt-4 font-bold">Moderatsiya navbatlari</h3><div className="flex flex-wrap gap-2">{Object.entries(d.queues).map(([k, n]) => <button key={k} type="button" onClick={() => r.push('/moderation')} className="rounded-full focus-visible:outline focus-visible:outline-2"><Badge tone={n ? 'warn' : 'muted'}>{QUEUE_LABEL[k] ?? k}: {String(n)} ›</Badge></button>)}</div></div></div>);
+}
+const QUEUE_LABEL: Record<string, string> = { products: 'Mahsulotlar', prices: 'Narxlar', stores: 'Do‘konlar', reviews: 'Sharhlar', contracts: 'Shartnomalar' };
+
+function Stores({ pre }: { pre: Pre }) {
+  const [page, setPage] = useState(1); const [status, setStatus] = useState(pre.status ?? ''); const [text, setText] = useState('');
+  const q = useApi<Paged<any>>(`/admin/overview/stores${qs({ status, q: text, page, pageSize: 15 })}`);
+  return (<>
+    <div className="mb-4 grid gap-2 sm:grid-cols-2"><input className="input" placeholder="Do‘kon nomi…" value={text} onChange={(e) => { setText(e.target.value); setPage(1); }} />
+      <select className="input" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}><option value="">Barcha holatlar</option><option value="VERIFIED">Tasdiqlangan</option><option value="PENDING">Kutilmoqda</option><option value="REJECTED">Rad etilgan</option><option value="SUSPENDED">To‘xtatilgan</option></select></div>
+    <ErrorBox error={q.error} retry={q.reload} />{q.loading && !q.data && <Spinner />}
+    {q.data && <Table head={['Do‘kon', 'Egasi', 'Hudud', 'Buyurtmalar', 'Holat']}>{q.data.items.map((s) => <tr key={s.id}><td className="px-4 py-3"><Link className="font-semibold text-brand-700 underline" href={`/stores/${s.slug ?? s.id}`}>{s.name}</Link></td><td className="px-4 py-3">{s.owner}</td><td className="px-4 py-3">{s.region ?? '—'}</td><td className="px-4 py-3">{s.orders}</td><td className="px-4 py-3"><Badge tone={statusTone(s.status)}>{s.status}</Badge></td></tr>)}</Table>}
+    {q.data && <Pager page={page} pages={q.data.pages ?? 1} onPage={setPage} />}</>);
 }
 
-function Users() {
-  const [page, setPage] = useState(1); const [f, setF] = useState({ q: '', role: '', status: '' }); const [sel, setSel] = useState<any>(null);
+function Products({ pre }: { pre: Pre }) {
+  const [page, setPage] = useState(1); const [status, setStatus] = useState(pre.status ?? ''); const [text, setText] = useState('');
+  const q = useApi<Paged<any>>(`/admin/overview/products${qs({ status, q: text, page, pageSize: 15 })}`);
+  return (<>
+    <div className="mb-4 grid gap-2 sm:grid-cols-2"><input className="input" placeholder="Mahsulot nomi…" value={text} onChange={(e) => { setText(e.target.value); setPage(1); }} />
+      <select className="input" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}><option value="">Barcha holatlar</option><option value="APPROVED">Tasdiqlangan</option><option value="PENDING">Kutilmoqda</option><option value="REJECTED">Rad etilgan</option></select></div>
+    <ErrorBox error={q.error} retry={q.reload} />{q.loading && !q.data && <Spinner />}
+    {q.data && <Table head={['Mahsulot', 'Kategoriya', 'Holat', 'Qo‘shilgan']}>{q.data.items.map((p) => <tr key={p.id}><td className="px-4 py-3"><Link className="font-semibold text-brand-700 underline" href={`/catalog/${p.slug ?? p.id}`}>{p.name}</Link></td><td className="px-4 py-3">{p.category ?? '—'}</td><td className="px-4 py-3"><Badge tone={statusTone(p.status)}>{p.status}</Badge></td><td className="px-4 py-3 text-ink-muted">{dt(p.createdAt)}</td></tr>)}</Table>}
+    {q.data && <Pager page={page} pages={q.data.pages ?? 1} onPage={setPage} />}</>);
+}
+
+function Orders({ pre }: { pre: Pre }) {
+  const [page, setPage] = useState(1); const [status, setStatus] = useState(pre.status ?? ''); const [text, setText] = useState('');
+  const q = useApi<Paged<any>>(`/admin/overview/orders${qs({ status, q: text, page, pageSize: 15 })}`);
+  return (<>
+    <div className="mb-4 grid gap-2 sm:grid-cols-2"><input className="input" placeholder="Buyurtma raqami…" value={text} onChange={(e) => { setText(e.target.value); setPage(1); }} />
+      <select className="input" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}><option value="">Barcha holatlar</option>{Object.entries(ORDER_STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+    <ErrorBox error={q.error} retry={q.reload} />{q.loading && !q.data && <Spinner />}
+    {q.data && <Table head={['Raqam', 'Xaridor', 'Do‘kon', 'Summa', 'Holat', 'Sana']}>{q.data.items.map((o) => <tr key={o.id}><td className="px-4 py-3"><Link className="font-semibold text-brand-700 underline" href={`/orders/${o.id}`}>{o.number}</Link></td><td className="px-4 py-3">{o.buyer}</td><td className="px-4 py-3">{o.store}</td><td className="px-4 py-3">{money(o.totalAmount)}</td><td className="px-4 py-3"><Badge tone={statusTone(o.status)}>{ORDER_STATUS[o.status] ?? o.status}</Badge></td><td className="px-4 py-3 text-ink-muted">{dt(o.createdAt)}</td></tr>)}</Table>}
+    {q.data && <Pager page={page} pages={q.data.pages ?? 1} onPage={setPage} />}</>);
+}
+
+function Users({ pre }: { pre: Pre }) {
+  const [page, setPage] = useState(1); const [f, setF] = useState({ q: '', role: pre.role ?? '', status: pre.status ?? '' }); const [sel, setSel] = useState<any>(null);
   const q = useApi<Paged<any>>(`/admin/users${qs({ ...f, page, pageSize: 15 })}`);
   return (<>
     <div className="mb-4 grid gap-2 sm:grid-cols-3"><input className="input" placeholder="Email, telefon, ism…" value={f.q} onChange={(e) => { setF({ ...f, q: e.target.value }); setPage(1); }} />
@@ -52,7 +101,9 @@ function UserModal({ u, onClose }: { u: any; onClose: () => void }) {
   const x = d.data; const protectedUser = u?.roles.includes('SUPER_ADMIN');
   return (
     <Modal open={!!u} title={u?.email ?? ''} onClose={onClose}>{x && <div className="space-y-4 text-sm">
-      <p>Buyurtmalar: <b>{x.orders}</b> · faol seanslar: <b>{x.activeSessions}</b> · shikoyatlar: <b>{x.complaintsAgainst}</b></p>
+      <div className="rounded-xl bg-cream-200 p-3"><p><b>{x.fullName ?? '—'}</b> · {x.roles.map((r: string) => ROLE_LABEL[r] ?? r).join(', ')}</p><p className="text-ink-soft">{x.email}{x.phone ? ` · ${x.phone}` : ''}</p><p className="text-xs text-ink-muted">Holat: {x.status}{x.verified ? ' · email tasdiqlangan' : ' · email tasdiqlanmagan'} · ro‘yxatdan o‘tgan: {dt(x.createdAt)}</p></div>
+      <p>Shartnomalar: <b>{x.contracts}</b> · Buyurtmalar: <b>{x.orders}</b> · faol seanslar: <b>{x.activeSessions}</b> · shikoyatlar: <b>{x.complaintsAgainst}</b></p>
+      {x.recentOrders?.length > 0 && <div><h3 className="mb-1 font-bold">So‘nggi buyurtmalar</h3><ul className="space-y-1">{x.recentOrders.map((o: any) => <li key={o.id}><Link className="font-semibold text-brand-700 underline" href={`/orders/${o.id}`}>{o.number}</Link> · {ORDER_STATUS[o.status] ?? o.status} · {money(o.totalAmount)} · {dt(o.createdAt)}</li>)}</ul></div>}
       {x.stores.length > 0 && <p>Do‘konlar: {x.stores.map((s: any) => `${s.name} (${s.status})`).join(', ')}</p>}
       {!protectedUser && <><div><h3 className="mb-1 font-bold">Rollar</h3><div className="flex flex-wrap gap-2">{['BUYER', 'SELLER', 'MODERATOR'].map((r) => x.roles.includes(r) ? <span key={r} className="btn btn-primary !min-h-[36px] !px-3 cursor-default" aria-current="true">{ROLE_LABEL[r]} (joriy)</span> : <button key={r} className="btn btn-ghost !min-h-[36px] !px-3" disabled={role.busy} onClick={() => void role.run(r, 'ADD')}>{ROLE_LABEL[r]} ga o‘tkazish</button>)}</div><p className="mt-1 text-xs text-ink-muted">Bir foydalanuvchi — bitta rol. Rol almashsa avvalgisi o‘chadi va seanslar tugatiladi.</p></div>
         <Field label="Sabab (bloklash/ochish uchun)"><input className="input" value={reason} onChange={(e) => setReason(e.target.value)} /></Field>

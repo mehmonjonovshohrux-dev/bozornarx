@@ -132,6 +132,14 @@ async function main() {
       { n: '0007', b: 0, s: 0, status: 'CREATED', ago: 0, items: [[2, 8], [0, 20]] },
       { n: '0008', b: 3, s: 3, status: 'CREATED', ago: 0, items: [[9, 12], [14, 30]] },
       { n: '0009', b: 2, s: 0, status: 'CANCELLED', ago: 5, items: [[7, 3]] },
+      // more buyer-seller chains (each pair trades with several others; product indexes avoid the gaps in each store's price list)
+      { n: '0010', b: 1, s: 2, status: 'COMPLETED', ago: 15, items: [[0, 15], [2, 5]], rating: 5, review: 'Tez va sifatli xizmat, shartnoma ham aniq edi.' },
+      { n: '0011', b: 3, s: 0, status: 'COMPLETED', ago: 18, items: [[1, 10], [4, 6]], rating: 4, review: 'Mahsulotlar yaxshi, narx hamyonbop.' },
+      { n: '0012', b: 2, s: 1, status: 'COMPLETED', ago: 7, items: [[6, 2], [7, 3]], rating: 5, review: 'Sotuvchi ishonchli, kelishilgan vaqtda topshirdi.' },
+      { n: '0013', b: 3, s: 3, status: 'DELIVERED', ago: 3, items: [[1, 20], [4, 10]] },
+      { n: '0014', b: 1, s: 0, status: 'SHIPPED', ago: 1, items: [[8, 5]] },
+      { n: '0015', b: 2, s: 3, status: 'CONFIRMED', ago: 1, items: [[2, 10]] },
+      { n: '0016', b: 0, s: 2, status: 'COMPLETED', ago: 25, items: [[3, 8]], rating: 5, review: 'Doimiy xaridorman, hech qachon xafa qilmagan.' },
     ];
     for (const o of ORDERS) {
       const number = `ORD-DEMO-${o.n}`;

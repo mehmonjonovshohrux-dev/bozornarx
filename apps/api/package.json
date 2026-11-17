@@ -15,6 +15,7 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "seed:reference": "node dist/scripts/seed-reference.js",
     "seed:demo": "node dist/scripts/seed-demo.js",
+    "seed:demo-contracts": "node dist/scripts/seed-demo-contracts.js",
     "create:admin": "node dist/scripts/create-admin.js"
   },
   "dependencies": {

@@ -143,9 +143,10 @@ enum PartyRole {
   SELLER
 }
 
-// Only the official provider is modelled. A drawn signature is NOT an official e-signature and has no enum value.
+// EIMZO is the official provider. A drawn signature is NOT an e-signature and has no value. DEMO_SIMPLE is a clearly labelled demo-only method.
 enum SignatureProvider {
   EIMZO
+  DEMO_SIMPLE // simple electronic signature (account password re-entry) used only in demo mode; NOT E-IMZO
 }
 
 enum VerificationStatus {

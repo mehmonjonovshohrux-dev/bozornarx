@@ -60,3 +60,5 @@ export const marketSchema = z.object({
   lat: z.number().min(-90).max(90).optional(),
   lng: z.number().min(-180).max(180).optional(),
 });
+
+export const listStatusQuery = pageSchema.extend({ status: opt(z.string().trim().min(2).max(30)), q: opt(z.string().trim().min(1).max(100)) });

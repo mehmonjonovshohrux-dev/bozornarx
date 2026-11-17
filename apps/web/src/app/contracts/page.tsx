@@ -13,19 +13,20 @@ import { qs, useAction, useApi, type Paged } from '@/lib/hooks';
 type Tab = 'buyer' | 'seller' | 'archive';
 export default function Contracts() {
   const { user } = useAuth();
-  const isSeller = !!user?.permissions.includes('stores.manage');
+  const isStaff = !!user?.roles?.some((r: string) => r === 'SUPER_ADMIN' || r === 'MODERATOR');
+  const isSeller = !isStaff && !!user?.permissions.includes('stores.manage');
   const [tab, setTab] = useState<Tab>('buyer'); const [page, setPage] = useState(1); const [open, setOpen] = useState(false);
   const q = useApi<Paged<any>>(`/contracts${qs({ as: tab === 'seller' ? 'seller' : 'buyer', archive: tab === 'archive', page, pageSize: 15 })}`);
-  const tabs: Array<{ id: Tab; label: string }> = [{ id: 'buyer', label: 'Xaridor sifatida' }, ...(isSeller ? [{ id: 'seller' as Tab, label: 'Sotuvchi sifatida' }] : []), { id: 'archive', label: 'Imzolanganlar arxivi' }];
+  const tabs: Array<{ id: Tab; label: string }> = [{ id: 'buyer', label: isStaff ? 'Barcha shartnomalar' : 'Xaridor sifatida' }, ...(isSeller ? [{ id: 'seller' as Tab, label: 'Sotuvchi sifatida' }] : []), { id: 'archive', label: 'Imzolanganlar arxivi' }];
   return (
     <AppShell>
-      <PageTitle title="Shartnomalar" sub="Buyurtma tasdiqlanganda shartnoma avtomatik yaratiladi. Qo‘lda ham tuzish mumkin." action={isSeller && <button className="btn btn-primary" onClick={() => setOpen(true)}>+ Yangi shartnoma</button>} />
+      <PageTitle title="Shartnomalar" sub={isStaff ? 'Barcha shartnomalar (faqat ko‘rish). Raqamni bossangiz tafsilotlari ochiladi.' : 'Buyurtma tasdiqlanganda shartnoma avtomatik yaratiladi. Qo‘lda ham tuzish mumkin.'} action={isSeller && <button className="btn btn-primary" onClick={() => setOpen(true)}>+ Yangi shartnoma</button>} />
       <Tabs tabs={tabs} value={tab} onChange={(t) => { setTab(t); setPage(1); }} />
       <ErrorBox error={q.error} retry={q.reload} />{q.loading && !q.data && <Spinner />}
       {q.data?.items.length === 0 && <Empty title="Shartnomalar yo‘q" />}
-      {q.data && q.data.items.length > 0 && <Table head={['Raqam', 'Do‘kon / Xaridor', 'Buyurtma', 'Holat', 'Muddat']}>{q.data.items.map((c) => (
+      {q.data && q.data.items.length > 0 && <Table head={['Raqam', isStaff ? 'Do‘kon · Xaridor' : 'Do‘kon / Xaridor', 'Buyurtma', 'Holat', 'Muddat']}>{q.data.items.map((c) => (
         <tr key={c.id}><td className="px-4 py-3"><Link className="font-semibold text-brand-700 underline" href={`/contracts/${c.id}`}>{c.number}</Link></td>
-          <td className="px-4 py-3">{tab === 'seller' ? c.buyerName : c.storeName}</td><td className="px-4 py-3">{c.orderNumber ?? '—'}</td>
+          <td className="px-4 py-3">{isStaff ? `${c.storeName} · ${c.buyerName}` : tab === 'seller' ? c.buyerName : c.storeName}</td><td className="px-4 py-3">{c.orderNumber ?? '—'}</td>
           <td className="px-4 py-3"><Badge tone={statusTone(c.status)}>{CONTRACT_STATUS[c.status] ?? c.status}</Badge></td><td className="px-4 py-3 text-ink-muted">{day(c.signedAt ?? c.expiresAt)}</td></tr>))}</Table>}
       {q.data && <Pager page={page} pages={q.data.pages ?? 1} onPage={setPage} />}
       <NewContract open={open} onClose={() => setOpen(false)} />

@@ -61,14 +61,16 @@ export function Field({ label, error, hint, children }: { label: string; error?:
   );
 }
 
-export function Stat({ label, value, sub, tone }: { label: string; value: ReactNode; sub?: string; tone?: 'accent' | 'brand' }) {
-  return (
-    <div className="card p-4">
-      <div className="text-sm text-ink-muted">{label}</div>
+export function Stat({ label, value, sub, tone, onClick }: { label: string; value: ReactNode; sub?: string; tone?: 'accent' | 'brand'; onClick?: () => void }) {
+  const body = (
+    <>
+      <div className="flex items-center justify-between text-sm text-ink-muted"><span>{label}</span>{onClick && <span aria-hidden className="text-brand-700">›</span>}</div>
       <div className={clsx('mt-1 text-2xl font-extrabold', tone === 'accent' ? 'text-accent-600' : 'text-brand-800')}>{value}</div>
       {sub && <div className="mt-0.5 text-xs text-ink-muted">{sub}</div>}
-    </div>
+    </>
   );
+  if (!onClick) return <div className="card p-4">{body}</div>;
+  return <button type="button" onClick={onClick} className="card w-full p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600" aria-label={`${label}: ${String(value)}. Ro‘yxatni ochish`}>{body}</button>;
 }
 
 export function Pager({ page, pages, onPage }: { page: number; pages: number; onPage: (p: number) => void }) {

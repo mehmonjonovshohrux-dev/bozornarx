@@ -26,6 +26,7 @@ export const contractCreateSchema = z.object({
 });
 export const contractTermsUpdateSchema = z.object({ terms: termsSchema });
 export const orderContractTermsSchema = z.object({ extraClauses: z.array(clause).max(10) });
+export const demoSignSchema = z.object({ password: z.string().min(1).max(200), agree: z.literal(true, { errorMap: () => ({ message: 'Shartnoma shartlariga rozilik bildiring' }) }) });
 export const signSchema = z.object({ pkcs7Base64: z.string().min(100).max(2_000_000) });
 export const contractListQuery = pageSchema.extend({
   as: z.enum(['buyer', 'seller']).default('buyer'),
