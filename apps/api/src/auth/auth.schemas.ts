@@ -40,6 +40,7 @@ export type EmailOnlyDto = z.infer<typeof emailOnlySchema>;
 export const loginSchema = z.object({ email, password: z.string().min(1).max(128) });
 export type LoginDto = z.infer<typeof loginSchema>;
 
+export const changePasswordSchema = z.object({ currentPassword: z.string().min(1).max(128), newPassword: password });
 export const resetPasswordSchema = z.object({ email, code, newPassword: password });
 export type ResetPasswordDto = z.infer<typeof resetPasswordSchema>;
 

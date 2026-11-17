@@ -240,6 +240,21 @@ export class AuthService {
     return answer;
   }
 
+  /** Signed-in person changes their own password: the current one must be right; every OTHER device is signed out. */
+  async changePassword(userId: string, sessionId: string, current: string, next: string, ctx: ClientCtx) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { profile: true } });
+    if (!user) throw new AppError(404, 'NOT_FOUND', 'Foydalanuvchi topilmadi.');
+    if (!(await verify(user.passwordHash, current).catch(() => false))) throw new AppError(400, 'WRONG_PASSWORD', 'Joriy parol noto‘g‘ri.');
+    if (current === next) throw new AppError(400, 'SAME_PASSWORD', 'Yangi parol joriy paroldan farq qilsin.');
+    const passwordHash = await hash(next, ARGON);
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: userId }, data: { passwordHash, failedLogins: 0, lockedUntil: null } }),
+      this.prisma.session.updateMany({ where: { userId, revokedAt: null, id: { not: sessionId } }, data: { revokedAt: new Date() } }),
+    ]);
+    await this.audit.record({ actorId: userId, action: 'AUTH_PASSWORD_CHANGED', entityType: 'user', entityId: userId, ip: ctx.ip, userAgent: ctx.userAgent });
+    void this.safeMail('login_alert', user.email, { name: user.profile?.fullName, title: 'Parol o‘zgartirildi', message: 'Hisobingiz paroli o‘zgartirildi. Boshqa qurilmalardagi seanslar yopildi.', when: fmtTime() });
+  }
+
   async resetPassword(dto: ResetPasswordDto, ctx: ClientCtx) {
     const user = await this.prisma.user.findUnique({ where: { email: dto.email }, include: { profile: true } });
     if (!user || !user.emailVerifiedAt) throw new AppError(400, 'INVALID_CODE', 'Kod noto‘g‘ri yoki eskirgan.');

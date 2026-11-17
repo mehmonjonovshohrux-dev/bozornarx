@@ -24,7 +24,7 @@ export default function Home() {
   const go = (e: FormEvent) => { e.preventDefault(); router.push(`/catalog${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`); };
   return (
     <div className="min-h-[100dvh] bg-[linear-gradient(180deg,#f1f8f3,#fbf7ee_45%)]">
-      <header className="sticky top-0 z-40 border-b border-cream-300 bg-white/90 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-cream-300 bg-white">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4">
           <Link href="/" aria-label="BozorNarx"><Brand /></Link>
           <nav className="hidden items-center gap-6 text-[15px] font-semibold text-ink-soft md:flex" aria-label="Asosiy">

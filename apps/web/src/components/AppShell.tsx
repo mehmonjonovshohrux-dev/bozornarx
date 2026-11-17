@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { ROLE_LABEL } from '@/lib/fmt';
 import { openStream } from '@/lib/realtime';
+import { Avatar } from './Avatar';
 import { Brand } from './Logo';
 import { SetupPrompt } from './SetupPrompt';
 import { Icon } from './ui/Icon';
@@ -101,10 +102,10 @@ const MAIN: Record<RoleKey, NavItem> = {
   SUPER_ADMIN: { href: '/admin', label: 'Boshqaruv', icon: 'server' },
 };
 const SKIN: Record<RoleKey, { side: string; active: string; chip: string }> = {
-  BUYER: { side: 'from-brand-900 to-brand-800', active: 'bg-white/15 text-white', chip: 'bg-white/10' },
-  SELLER: { side: 'from-brand-900 to-brand-800', active: 'bg-white/15 text-white', chip: 'bg-white/10' },
-  MODERATOR: { side: 'from-[#06382b] to-[#0b4f3a]', active: 'bg-white/15 text-white', chip: 'bg-white/10' },
-  SUPER_ADMIN: { side: 'from-[#04231d] to-[#063b33]', active: 'bg-emerald-400/20 text-emerald-100', chip: 'bg-white/10' },
+  BUYER: { side: 'bg-brand-900', active: 'bg-white/15 text-white', chip: 'bg-white/10' },
+  SELLER: { side: 'bg-brand-900', active: 'bg-white/15 text-white', chip: 'bg-white/10' },
+  MODERATOR: { side: 'bg-[#06382b]', active: 'bg-white/15 text-white', chip: 'bg-white/10' },
+  SUPER_ADMIN: { side: 'bg-[#04231d]', active: 'bg-emerald-400/20 text-emerald-100', chip: 'bg-white/10' },
 };
 export const roleOf = (roles: string[] | undefined): RoleKey => (['SUPER_ADMIN', 'MODERATOR', 'SELLER', 'BUYER'] as RoleKey[]).find((r) => roles?.includes(r)) ?? 'BUYER';
 
@@ -147,17 +148,16 @@ export function AppShell({ children, wide }: { children: ReactNode; wide?: boole
     { href: '/map', label: 'Xarita', icon: 'map' }, { href: '/settings', label: 'Sozlamalar', icon: 'settings' },
   ];
   const name = user.profile?.fullName ?? user.roles.map((r) => ROLE_LABEL[r] ?? r).join('');
-  const initials = name.split(' ').map((s) => s[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
   const search = (e: FormEvent) => { e.preventDefault(); router.push(`/catalog${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`); };
 
   const sidebar = (
-    <div className={clsx('flex h-full flex-col bg-gradient-to-b text-white', skin.side)}>
+    <div className={clsx('flex h-full flex-col text-white', skin.side)}>
       <div className="px-5 pb-3 pt-5"><Link href="/dashboard" aria-label="BozorNarx" className="block"><Brand light /></Link></div>
       <div className={clsx('mx-4 mb-3 flex items-center gap-3 rounded-2xl p-3', skin.chip)}>
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/20 text-sm font-bold">{initials || '?'}</span>
+        <Avatar url={user.profile?.avatarUrl} name={name} size={40} />
         <span className="min-w-0"><span className="block truncate text-sm font-bold">{name}</span><span className="block text-xs text-emerald-100/80">{ROLE_LABEL[role]}</span></span>
       </div>
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-3" aria-label="Bo‘limlar">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto overscroll-contain px-3 pb-3" aria-label="Bo‘limlar">
         {[...items, ...(role === 'SUPER_ADMIN' ? [{ href: '#sec', label: 'Boshqaruv bo‘limlari', icon: '' }, ...ADMIN_SECTIONS] : []), { href: '#more', label: 'Ilova', icon: '' }, ...COMMON].map((i) => i.href.startsWith('#') ? (
           <div key={i.href} className="px-3 pb-1 pt-3 text-[11px] font-bold uppercase tracking-wide text-emerald-100/60">{i.label}</div>
         ) : (
@@ -174,10 +174,10 @@ export function AppShell({ children, wide }: { children: ReactNode; wide?: boole
   );
 
   return (
-    <div className="min-h-[100dvh] bg-[linear-gradient(180deg,#f1f8f3,#fbf7ee_40%)] pb-20 lg:pb-0">
+    <div className="min-h-[100dvh] bg-[#f7f6ef] pb-20 lg:pb-0">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 lg:block">{sidebar}</aside>
       <div className="lg:pl-64">
-        <header className="sticky top-0 z-40 border-b border-cream-300 bg-white/90 backdrop-blur">
+        <header className="sticky top-0 z-40 border-b border-cream-300 bg-white">
           <div className="flex h-16 items-center gap-3 px-4 lg:px-6">
             <button className="rounded-lg p-2 lg:hidden" aria-label="Menyu" onClick={() => setMenu(true)}><Icon name="menu" size={24} /></button>
             <Link href="/dashboard" className="lg:hidden" aria-label="BozorNarx"><Brand /></Link>
@@ -190,7 +190,7 @@ export function AppShell({ children, wide }: { children: ReactNode; wide?: boole
                 <Icon name="bell" size={20} />{unread > 0 && <span className="absolute -right-1 -top-1 min-w-[18px] rounded-full bg-accent-500 px-1 text-center text-[11px] font-bold text-white">{unread > 99 ? '99+' : unread}</span>}
               </Link>
               <div className="flex items-center gap-2 rounded-xl border border-cream-300 bg-white py-1 pl-1 pr-3">
-                <span className="grid h-9 w-9 place-items-center rounded-full bg-brand-700 text-sm font-bold text-white">{initials || '?'}</span>
+                <Avatar url={user.profile?.avatarUrl} name={name} size={36} />
                 <span className="hidden leading-tight sm:block"><span className="block text-sm font-bold">{name.split(' ')[0]}</span><span className="block text-xs text-ink-muted">{ROLE_LABEL[role]}</span></span>
               </div>
             </div>
@@ -207,7 +207,7 @@ export function AppShell({ children, wide }: { children: ReactNode; wide?: boole
         ))}
       </nav>
       {menu && (
-        <div className="fixed inset-0 z-[60] bg-black/50 lg:hidden" onClick={() => setMenu(false)}>
+        <div className="fixed inset-0 z-[60] bg-black/40 lg:hidden" onClick={() => setMenu(false)}>
           <div className="h-full w-72" onClick={(e) => e.stopPropagation()}>{sidebar}</div>
         </div>
       )}

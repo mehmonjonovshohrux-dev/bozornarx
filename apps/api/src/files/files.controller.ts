@@ -10,7 +10,7 @@ import { Me, Secured, idParam } from '../common/util';
 import { StorageModule, StorageService } from './files.service';
 
 const uploadSchema = z.object({
-  kind: z.enum(['PRODUCT_IMAGE', 'CHAT', 'EVIDENCE', 'STORE_DOC', 'DELIVERY_ACT']),
+  kind: z.enum(['AVATAR', 'PRODUCT_IMAGE', 'CHAT', 'EVIDENCE', 'STORE_DOC', 'DELIVERY_ACT']),
   dataBase64: z.string().min(16).max(12_000_000),
 });
 
@@ -19,12 +19,12 @@ const uploadSchema = z.object({
 export class FilesController {
   constructor(private readonly storage: StorageService) {}
 
-  /** Upload as JSON/base64 (no multipart parser needed). Product images are public, everything else private. */
+  /** Upload as JSON/base64 (no multipart parser needed). Product images and avatars are public, everything else private. */
   @Post()
   @Secured()
   async upload(@Me() user: AuthUser, @Body(new ZodPipe(uploadSchema)) body: z.infer<typeof uploadSchema>) {
     const data = Buffer.from(body.dataBase64, 'base64');
-    return this.storage.put({ ownerId: user.id, kind: body.kind, data, isPublic: body.kind === 'PRODUCT_IMAGE' });
+    return this.storage.put({ ownerId: user.id, kind: body.kind, data, isPublic: body.kind === 'PRODUCT_IMAGE' || body.kind === 'AVATAR' });
   }
 
   /** Public files only (product images). Long cache: file ids are immutable. */

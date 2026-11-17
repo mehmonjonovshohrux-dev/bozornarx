@@ -12,7 +12,7 @@ export default function Alerts() {
   const toggle = useAction(async (id: string, active: boolean) => { await api(`/alerts/${id}/toggle`, { body: { active } }); q.reload(); });
   const del = useAction(async (id: string) => { await api(`/alerts/${id}`, { method: 'DELETE' }); q.reload(); });
   return (
-    <AppShell><PageTitle title="Narx ogohlantirishlari" sub="Yangi ogohlantirish mahsulot sahifasidan yaratiladi. Shart bajarilganda bildirishnoma, email yoki push olasiz." />
+    <AppShell><PageTitle title="Narx ogohlantirishlari" sub="Yangi ogohlantirish mahsulot sahifasidan yaratiladi. Shart bajarilganda bildirishnoma olasiz (sozlamalar: Bildirishnomalar bo‘limida)." />
       <ErrorBox error={q.error ?? toggle.error ?? del.error} retry={q.reload} />{q.loading && !q.data && <Spinner />}
       {q.data?.length === 0 && <Empty title="Ogohlantirishlar yo‘q" action={<Link href="/catalog" className="btn btn-primary mt-2">Katalog</Link>} />}
       <ul className="space-y-3">{q.data?.map((a) => (
