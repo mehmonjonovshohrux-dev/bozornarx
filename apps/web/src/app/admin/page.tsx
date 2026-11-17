@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { Badge, ErrorBox, Field, Modal, PageTitle, Pager, Spinner, Stat, Table, Tabs, statusTone } from '@/components/ui/kit';
 import { api } from '@/lib/api';
@@ -11,12 +11,16 @@ import { qs, useAction, useApi, usePublicApi, type Paged } from '@/lib/hooks';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type T = 'stats' | 'stores' | 'products' | 'orders' | 'users' | 'payments' | 'plans' | 'settings' | 'audit' | 'templates' | 'catalog';
 type Pre = { role?: string; status?: string };
-export default function Admin() {
-  const [tab, setTab] = useState<T>('stats'); const [pre, setPre] = useState<Pre>({}); const [n, setN] = useState(0);
+const TAB_TITLE: Record<string, string> = { stats: 'Statistika', users: 'Foydalanuvchilar', stores: 'Do‘konlar', products: 'Mahsulotlar', orders: 'Buyurtmalar', payments: 'To‘lovlar', plans: 'Tariflar', settings: 'Sozlamalar (tizim)', audit: 'Audit jurnali', templates: 'Shablonlar', catalog: 'Hudud/Kategoriya' };
+export default function Admin() { return <Suspense fallback={null}><AdminInner /></Suspense>; }
+function AdminInner() {
+  const params = useSearchParams(); const fromUrl = params.get('tab');
+  const [tab, setTab] = useState<T>((fromUrl && fromUrl in TAB_TITLE ? fromUrl : 'stats') as T);
+  useEffect(() => { if (fromUrl && fromUrl in TAB_TITLE) setTab(fromUrl as T); }, [fromUrl]); const [pre, setPre] = useState<Pre>({}); const [n, setN] = useState(0);
   const go = (t: T, p: Pre = {}) => { setPre(p); setN((x) => x + 1); setTab(t); };
   return (
-    <AppShell><PageTitle title="Admin panel" />
-      <Tabs<T> tabs={[{ id: 'stats', label: 'Statistika' }, { id: 'users', label: 'Foydalanuvchilar' }, { id: 'stores', label: 'Do‘konlar' }, { id: 'products', label: 'Mahsulotlar' }, { id: 'orders', label: 'Buyurtmalar' }, { id: 'payments', label: 'To‘lovlar' }, { id: 'plans', label: 'Tariflar' }, { id: 'settings', label: 'Sozlamalar' }, { id: 'audit', label: 'Audit jurnali' }, { id: 'templates', label: 'Shablonlar' }, { id: 'catalog', label: 'Hudud/Kategoriya' }]} value={tab} onChange={(t) => go(t)} />
+    <AppShell><PageTitle title={`Admin panel · ${TAB_TITLE[tab] ?? ''}`} />
+      <div className="hidden lg:block"><Tabs<T> tabs={[{ id: 'stats', label: 'Statistika' }, { id: 'users', label: 'Foydalanuvchilar' }, { id: 'stores', label: 'Do‘konlar' }, { id: 'products', label: 'Mahsulotlar' }, { id: 'orders', label: 'Buyurtmalar' }, { id: 'payments', label: 'To‘lovlar' }, { id: 'plans', label: 'Tariflar' }, { id: 'settings', label: 'Sozlamalar' }, { id: 'audit', label: 'Audit jurnali' }, { id: 'templates', label: 'Shablonlar' }, { id: 'catalog', label: 'Hudud/Kategoriya' }]} value={tab} onChange={(t) => go(t)} /></div>
       {tab === 'stats' && <Stats go={go} />}{tab === 'users' && <Users key={n} pre={pre} />}{tab === 'stores' && <Stores key={n} pre={pre} />}{tab === 'products' && <Products key={n} pre={pre} />}{tab === 'orders' && <Orders key={n} pre={pre} />}
       {tab === 'payments' && <Payments />}{tab === 'plans' && <Plans />}{tab === 'settings' && <Settings />}{tab === 'audit' && <Audit />}{tab === 'templates' && <Templates />}{tab === 'catalog' && <CatalogAdmin />}
     </AppShell>

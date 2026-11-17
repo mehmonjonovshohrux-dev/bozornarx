@@ -1,10 +1,14 @@
-import { Controller, Get, Module, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Module, Patch, Req, UseGuards } from '@nestjs/common';
+import { z } from 'zod';
+import { ZodPipe } from '../common/http';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuthModule } from '../auth/auth.module';
 import { AuthedRequest, JwtAuthGuard } from '../auth/guards';
 import { AppError } from '../common/app-error';
 import { ROLE_PERMISSIONS, Role } from '../domain/permissions';
 import { PrismaService } from '../prisma/prisma.service';
+
+const profileSchema = z.object({ fullName: z.string().trim().min(2, 'Ism kamida 2 ta belgi').max(100) });
 
 @ApiTags('me')
 @Controller('me')
@@ -22,6 +26,13 @@ export class MeController {
     if (!user) throw new AppError(404, 'NOT_FOUND', 'Foydalanuvchi topilmadi.');
     const permissions = [...new Set(req.user.roles.flatMap((r: Role) => ROLE_PERMISSIONS[r]))].sort();
     return { ...user, roles: req.user.roles, permissions };
+  }
+
+  /** The user edits only their own display name here (email/phone changes need verification and are not offered). */
+  @Patch()
+  async update(@Req() req: AuthedRequest, @Body(new ZodPipe(profileSchema)) b: z.infer<typeof profileSchema>) {
+    await this.prisma.userProfile.update({ where: { userId: req.user.id }, data: { fullName: b.fullName } });
+    return { fullName: b.fullName };
   }
 }
 
