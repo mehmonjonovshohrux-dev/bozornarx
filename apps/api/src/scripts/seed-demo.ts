@@ -1,26 +1,22 @@
 // DEMO DATA — never part of the normal deploy. It makes the platform look "used" so every screen and flow can be tested:
 //   ALLOW_DEMO_SEED=yes DEMO_PASSWORD='<min 12 chars>' npm run seed:demo      (create / refresh; safe to run twice)
 //   ALLOW_DEMO_SEED=yes DEMO_CLEANUP=yes npm run seed:demo                     (remove exactly the demo rows)
-// Everything is tagged: emails end with @demo.bozornarx.invalid, stores/markets start with "[DEMO]", product slugs start with "demo-",
+// Everything is tagged: emails are demo.*@example.com, stores/markets start with "[DEMO]", product slugs start with "demo-",
 // order numbers start with "ORD-DEMO-". Real data is never touched. Contracts are NOT seeded: confirm a CREATED demo order as the
 // seller and the platform generates a real contract (so the contract flow is tested with real code, not fake rows).
 import { PrismaClient } from '@prisma/client';
 import { hash } from '@node-rs/argon2';
+import { purge } from './purge';
+import { DEMO_BUYERS, DEMO_DOMAIN, DEMO_MODERATORS, DEMO_SELLERS } from './demo-accounts';
 
-const DOMAIN = '@demo.bozornarx.invalid';
+const DOMAIN = DEMO_DOMAIN;
 const DAY = 86_400_000;
 const slug = (s: string) => s.toLowerCase().replace(/[ʻʼ‘’`']/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 const round100 = (n: number) => Math.round(n / 100) * 100;
 function rng(seed: number) { let a = seed; return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
-const SELLERS = [
-  { local: 'seller1', name: 'Akmal Karimov', store: '[DEMO] Chorsu Mevasabzavot', region: 'Toshkent shahri', market: '[DEMO] Chorsu bozori', status: 'VERIFIED' },
-  { local: 'seller2', name: 'Dilnoza Rasulova', store: '[DEMO] Yunusobod Market', region: 'Toshkent shahri', market: null, status: 'VERIFIED' },
-  { local: 'seller3', name: 'Jasur Tursunov', store: '[DEMO] Siyob Savdo', region: 'Samarqand viloyati', market: '[DEMO] Siyob bozori', status: 'VERIFIED' },
-  { local: 'seller4', name: 'Malika Yusupova', store: '[DEMO] Farg‘ona Dehqon', region: 'Farg‘ona viloyati', market: null, status: 'VERIFIED' },
-  { local: 'seller5', name: 'Bobur Ergashev', store: '[DEMO] Yangi Do‘kon (tasdiq kutilmoqda)', region: 'Toshkent viloyati', market: null, status: 'PENDING' },
-] as const;
-const BUYERS = [['buyer1', 'Sardor Aliyev'], ['buyer2', 'Nodira Karimova'], ['buyer3', 'Otabek Qodirov'], ['buyer4', 'Zilola Ahmedova']] as const;
+const SELLERS = DEMO_SELLERS;
+const BUYERS = DEMO_BUYERS;
 // [name, category, unit, base price]
 const PRODUCTS: Array<[string, string, string, number]> = [
   ['Kartoshka', 'Kartoshka, piyoz, sabzi', 'kg', 7000], ['Piyoz', 'Kartoshka, piyoz, sabzi', 'kg', 5000], ['Sabzi', 'Kartoshka, piyoz, sabzi', 'kg', 6000],
@@ -37,31 +33,8 @@ async function cleanup(prisma: PrismaClient) {
   const sid = stores.map((s) => s.id);
   const orders = await prisma.order.findMany({ where: { number: { startsWith: 'ORD-DEMO-' } }, select: { id: true } });
   const oid = orders.map((o) => o.id);
-  const prices = await prisma.priceRecord.findMany({ where: { storeId: { in: sid } }, select: { id: true } });
-  const pid = prices.map((p) => p.id);
-  const contracts = await prisma.contract.count({ where: { OR: [{ orderId: { in: oid } }, { buyerId: { in: uid } }, { sellerStoreId: { in: sid } }] } });
-  if (contracts > 0) throw new Error(`${contracts} contract(s) were created from demo orders; contracts are append-only and are not deleted. Cleanup stopped, nothing was changed.`);
-  await prisma.complaint.deleteMany({ where: { filedById: { in: uid } } });
-  await prisma.review.deleteMany({ where: { OR: [{ storeId: { in: sid } }, { authorId: { in: uid } }] } });
-  await prisma.message.deleteMany({ where: { conversation: { storeId: { in: sid } } } });
-  await prisma.conversation.deleteMany({ where: { storeId: { in: sid } } });
-  await prisma.notification.deleteMany({ where: { userId: { in: uid } } });
-  await prisma.favorite.deleteMany({ where: { userId: { in: uid } } });
-  await prisma.priceAlert.deleteMany({ where: { userId: { in: uid } } });
-  await prisma.offer.deleteMany({ where: { storeId: { in: sid } } });
-  await prisma.payment.deleteMany({ where: { orderId: { in: oid } } });
-  await prisma.delivery.deleteMany({ where: { orderId: { in: oid } } });
-  await prisma.orderItem.deleteMany({ where: { orderId: { in: oid } } });
-  await prisma.order.deleteMany({ where: { id: { in: oid } } });
-  await prisma.discount.deleteMany({ where: { storeId: { in: sid } } });
-  await prisma.stockMovement.deleteMany({ where: { priceRecordId: { in: pid } } });
-  await prisma.priceHistory.deleteMany({ where: { priceRecordId: { in: pid } } });
-  await prisma.priceRecord.deleteMany({ where: { id: { in: pid } } });
-  await prisma.product.deleteMany({ where: { createdById: { in: uid } } });
-  await prisma.store.deleteMany({ where: { id: { in: sid } } });
+  await purge(prisma, { uid, sid, oid });
   await prisma.market.deleteMany({ where: { name: { startsWith: '[DEMO]' } } });
-  await prisma.auditLog.deleteMany({ where: { actorId: { in: uid } } });
-  await prisma.user.deleteMany({ where: { id: { in: uid } } });
   console.log(`demo data removed (users ${uid.length}, stores ${sid.length}, orders ${oid.length}).`);
 }
 
@@ -82,7 +55,10 @@ async function main() {
     const mk = async (local: string, fullName: string, role: string, regionName?: string) => {
       const email = `${local}${DOMAIN}`;
       const found = await prisma.user.findUnique({ where: { email } });
-      if (found) return found;
+      if (found) {
+        // Keep demo accounts usable: reset the password to the current DEMO_PASSWORD and make sure the account is active.
+        return prisma.user.update({ where: { id: found.id }, data: { passwordHash, status: 'ACTIVE', emailVerifiedAt: found.emailVerifiedAt ?? new Date(), failedLogins: 0, lockedUntil: null } });
+      }
       const region = regionName ? await regionBySlug(regionName) : null;
       return prisma.user.create({ data: { email, passwordHash, status: 'ACTIVE', emailVerifiedAt: new Date(), profile: { create: { fullName, regionId: region?.id } }, roles: { create: { roleId: await roleId(role) } } } });
     };
@@ -90,7 +66,7 @@ async function main() {
     for (const s of SELLERS) sellers.push(await mk(s.local, s.name, 'SELLER', s.region));
     const buyers = [];
     for (const [l, n] of BUYERS) buyers.push(await mk(l, n, 'BUYER', 'Toshkent shahri'));
-    await mk('moderator1', 'Demo Moderator', 'MODERATOR');
+    for (const [l, n] of DEMO_MODERATORS) await mk(l, n, 'MODERATOR');
 
     // ---- markets + stores
     const stores = [];
@@ -100,7 +76,7 @@ async function main() {
       if (s.market) market = (await prisma.market.findFirst({ where: { name: s.market } })) ?? (await prisma.market.create({ data: { name: s.market, regionId: region.id, address: `${s.region}, markaziy bozor`, lat: (region.lat ?? 41.3) + 0.01, lng: (region.lng ?? 69.2) + 0.01 } }));
       const found = await prisma.store.findFirst({ where: { name: s.store } });
       stores.push(found ?? (await prisma.store.create({ data: {
-        name: s.store, slug: `demo-${slug(s.local)}`, ownerId: sellers[i]!.id, regionId: region.id, marketId: market?.id, status: s.status, verifiedAt: s.status === 'VERIFIED' ? new Date() : null,
+        name: s.store, slug: `demo-${slug(s.local.replace('demo.', ''))}`, ownerId: sellers[i]!.id, regionId: region.id, marketId: market?.id, status: s.status, verifiedAt: s.status === 'VERIFIED' ? new Date() : null,
         description: 'Demo do‘kon: sinov uchun yaratilgan.', lat: (region.lat ?? 41.3) + (rnd() - 0.5) * 0.06, lng: (region.lng ?? 69.2) + (rnd() - 0.5) * 0.06,
       } })));
     }
@@ -216,8 +192,8 @@ async function main() {
     }
 
     console.log('demo data ready.');
-    console.log(`Accounts (password = DEMO_PASSWORD): ${SELLERS.map((s) => s.local).join(', ')}, ${BUYERS.map((b) => b[0]).join(', ')}, moderator1  @demo.bozornarx.invalid`);
-    console.log('Test ideas: seller1 confirms ORD-DEMO-0007 (contract is generated); moderator1 approves seller5 store, the pending product, and the pending price; buyer2 offer -> seller1 counters.');
+    console.log(`Accounts (password = DEMO_PASSWORD): ${[...SELLERS.map((x) => x.local), ...BUYERS.map((x) => x[0]), ...DEMO_MODERATORS.map((x) => x[0])].map((l) => l + DOMAIN).join(', ')}`);
+    console.log('Test ideas: demo.seller1 confirms ORD-DEMO-0007 (contract is generated); demo.moderator1 approves demo.seller5 store, the pending product, and the pending price; demo.buyer2 offer -> demo.seller1 counters.');
   } finally {
     await prisma.$disconnect();
   }

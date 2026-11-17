@@ -29,3 +29,9 @@ body { @apply bg-cream-100 text-ink font-sans antialiased; min-height: 100dvh; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+/* Installed-app (phone) behaviour: no pull-to-refresh/overscroll bounce that looks like leaving the app, no tap flash, safe areas. */
+html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; }
+body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+img { max-width: 100%; }
+@media (display-mode: standalone) { body { user-select: none; -webkit-user-select: none; } input, textarea, select { user-select: text; -webkit-user-select: text; } }

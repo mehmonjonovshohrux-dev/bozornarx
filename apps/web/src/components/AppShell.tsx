@@ -32,6 +32,7 @@ const NAVS: Record<RoleKey, NavItem[]> = {
     { href: '/alerts', label: 'Narx ogohlantirishlari', icon: 'chart' },
     { href: '/disputes', label: 'Nizolar', icon: 'scale' },
     { href: '/notifications', label: 'Bildirishnomalar', icon: 'bell' },
+    { href: '/security', label: 'Xavfsizlik va ilova', icon: 'shield' },
   ],
   SELLER: [
     { href: '/dashboard', label: 'Bosh sahifa', icon: 'home', mobile: true },
@@ -46,6 +47,7 @@ const NAVS: Record<RoleKey, NavItem[]> = {
     { href: '/map', label: 'Xarita (joylashuv)', icon: 'map' },
     { href: '/disputes', label: 'Nizolar', icon: 'scale' },
     { href: '/notifications', label: 'Bildirishnomalar', icon: 'bell' },
+    { href: '/security', label: 'Xavfsizlik va ilova', icon: 'shield' },
   ],
   MODERATOR: [
     { href: '/dashboard', label: 'Bosh sahifa', icon: 'home', mobile: true },
@@ -54,6 +56,7 @@ const NAVS: Record<RoleKey, NavItem[]> = {
     { href: '/map', label: 'Xarita nazorati', icon: 'map', mobile: true },
     { href: '/chat', label: 'Chat', icon: 'chat' },
     { href: '/notifications', label: 'Bildirishnomalar', icon: 'bell' },
+    { href: '/security', label: 'Xavfsizlik va ilova', icon: 'shield' },
   ],
   SUPER_ADMIN: [
     { href: '/dashboard', label: 'Bosh sahifa', icon: 'home', mobile: true },
@@ -64,6 +67,7 @@ const NAVS: Record<RoleKey, NavItem[]> = {
     { href: '/disputes', label: 'Nizolar', icon: 'scale' },
     { href: '/map', label: 'Xarita', icon: 'map', mobile: true },
     { href: '/notifications', label: 'Bildirishnomalar', icon: 'bell' },
+    { href: '/security', label: 'Xavfsizlik va ilova', icon: 'shield' },
   ],
 };
 const SKIN: Record<RoleKey, { side: string; active: string; chip: string }> = {

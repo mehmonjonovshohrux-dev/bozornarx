@@ -1,5 +1,6 @@
 'use client';
 
+import { PasswordInput } from '@/components/PasswordInput';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AnimatePresence, motion } from 'framer-motion';
 import Link from 'next/link';
@@ -129,7 +130,7 @@ export default function RegisterPage() {
               <label className="label" htmlFor="password">
                 Parol
               </label>
-              <input id="password" type="password" autoComplete="new-password" className={`input ${errors.password ? 'input-error' : ''}`} {...register('password')} />
+              <PasswordInput id="password" autoComplete="new-password" className={`input ${errors.password ? 'input-error' : ''}`} {...register('password')} />
               <p className="mt-1.5 text-xs text-ink-muted">Kamida 8 belgi, harf va raqam bilan.</p>
               <FieldError message={errors.password?.message} />
             </div>

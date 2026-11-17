@@ -18,18 +18,25 @@ node dist/scripts/seed-reference.js
 # Optional one-off tasks, driven by environment variables set in the Render dashboard (remove them afterwards).
 # They never stop or delay the API from starting; the demo tasks run in the background and failures are only logged.
 if [ -n "${ADMIN_EMAIL:-}" ] && [ -n "${ADMIN_PASSWORD:-}" ]; then
-  echo "[entrypoint] creating first super admin (skipped if the email already exists)"
+  echo "[entrypoint] super admin: create, or sync the password from ADMIN_PASSWORD"
   node dist/scripts/create-admin.js || echo "[entrypoint] create-admin did not change anything (see message above)"
 fi
-if [ "${DEMO_SEED:-}" = "yes" ] && [ -n "${DEMO_PASSWORD:-}" ]; then
-  echo "[entrypoint] loading DEMO data (tagged @demo.bozornarx.invalid)"
-  # Runs in the background: over a remote database the seed takes many minutes and must never delay the port (Render kills a deploy that does not open its port).
-  ( ALLOW_DEMO_SEED=yes ALLOW_DEMO_IN_PRODUCTION=yes node dist/scripts/seed-demo.js && echo "[entrypoint] demo seed finished" || echo "[entrypoint] demo seed failed (see message above)" ) &
-fi
-if [ "${DEMO_CLEANUP:-}" = "yes" ]; then
-  echo "[entrypoint] removing DEMO data"
-  ( ALLOW_DEMO_SEED=yes ALLOW_DEMO_IN_PRODUCTION=yes DEMO_CLEANUP=yes node dist/scripts/seed-demo.js && echo "[entrypoint] demo cleanup finished" || echo "[entrypoint] demo cleanup failed (see message above)" ) &
-fi
+# Background chain: prune (optional) -> demo seed (optional) -> demo cleanup (optional). The seed over a remote database takes many minutes
+# and must never delay the port (Render kills a deploy that does not open its port), so none of this blocks the API start.
+(
+  if [ "${PRUNE_USERS:-}" = "yes" ]; then
+    echo "[entrypoint] pruning accounts (keeps demo accounts, ADMIN_EMAIL and Super Admins)"
+    PRUNE_USERS=yes node dist/scripts/prune-users.js || echo "[entrypoint] prune failed (see message above)"
+  fi
+  if [ "${DEMO_SEED:-}" = "yes" ] && [ -n "${DEMO_PASSWORD:-}" ]; then
+    echo "[entrypoint] loading DEMO data (accounts demo.*@example.com)"
+    ALLOW_DEMO_SEED=yes ALLOW_DEMO_IN_PRODUCTION=yes node dist/scripts/seed-demo.js && echo "[entrypoint] demo seed finished" || echo "[entrypoint] demo seed failed (see message above)"
+  fi
+  if [ "${DEMO_CLEANUP:-}" = "yes" ]; then
+    echo "[entrypoint] removing DEMO data"
+    ALLOW_DEMO_SEED=yes ALLOW_DEMO_IN_PRODUCTION=yes DEMO_CLEANUP=yes node dist/scripts/seed-demo.js && echo "[entrypoint] demo cleanup finished" || echo "[entrypoint] demo cleanup failed (see message above)"
+  fi
+) &
 
 echo "[entrypoint] starting API"
 exec node dist/main.js

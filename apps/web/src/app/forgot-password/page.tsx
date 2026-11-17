@@ -1,5 +1,6 @@
 'use client';
 
+import { PasswordInput } from '@/components/PasswordInput';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { AuthShell } from '@/components/AuthShell';
@@ -94,7 +95,7 @@ export default function ForgotPasswordPage() {
             <label className="label" htmlFor="newPassword">
               Yangi parol
             </label>
-            <input id="newPassword" type="password" autoComplete="new-password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <PasswordInput id="newPassword" autoComplete="new-password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} />
             <p className="mt-1.5 text-xs text-ink-muted">Kamida 8 belgi, harf va raqam bilan.</p>
           </div>
           {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-danger" role="alert">{error}</p>}

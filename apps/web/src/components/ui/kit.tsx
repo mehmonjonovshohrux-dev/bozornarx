@@ -2,7 +2,7 @@
 import clsx from 'clsx';
 import { categoryArt, productArt } from '@/lib/productArt';
 import Link from 'next/link';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ApiError } from '@/lib/api';
 
 export function Spinner({ label = 'Yuklanmoqda…' }: { label?: string }) {
@@ -96,12 +96,23 @@ export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: Array<
 }
 
 export function Modal({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: ReactNode }) {
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     if (!open) return;
-    const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const h = (e: KeyboardEvent) => e.key === 'Escape' && closeRef.current();
     document.addEventListener('keydown', h);
-    return () => document.removeEventListener('keydown', h);
-  }, [open, onClose]);
+    // The phone's Back button / edge swipe closes the dialog instead of leaving the screen.
+    window.history.pushState({ ...(window.history.state ?? {}), bnModal: true }, '', window.location.href);
+    let poppedByUser = false;
+    const onPop = () => { poppedByUser = true; closeRef.current(); };
+    window.addEventListener('popstate', onPop);
+    return () => {
+      document.removeEventListener('keydown', h);
+      window.removeEventListener('popstate', onPop);
+      if (!poppedByUser && window.history.state?.bnModal) window.history.back();
+    };
+  }, [open]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onClose}>

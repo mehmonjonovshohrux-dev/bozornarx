@@ -32,14 +32,42 @@ interface Envelope<T> {
   error?: { code: string; message: string; details?: Record<string, unknown> };
 }
 
+// The free server sleeps after ~15 min without traffic and needs up to ~50 s to wake. Instead of showing "server not responding" right away,
+// retry (network errors on GET/auth calls, and 502/503/504 which mean "nothing was processed") and tell the UI so it can show a friendly banner.
+const WAKE_DELAYS = [1500, 2500, 3500, 5000, 6000, 8000, 10000, 12000];
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+function serverState(state: 'waking' | 'ok') {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('bn-server', { detail: state }));
+}
+
 async function send(path: string, method: string, body: unknown, withAuth: boolean): Promise<Response> {
   const headers: Record<string, string> = { 'x-client': 'web' };
   if (body !== undefined) headers['content-type'] = 'application/json';
-  if (withAuth && accessToken) headers.authorization = `Bearer ${accessToken}`;
-  try {
-    return await fetch(`/api${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'same-origin' });
-  } catch {
-    throw new ApiError(0, 'NETWORK', 'Internet aloqasi yo‘q yoki server javob bermayapti.');
+  const retryNetwork = method === 'GET' || path.startsWith('/auth/');
+  let woke = false;
+  for (let attempt = 0; ; attempt++) {
+    if (withAuth && accessToken) headers.authorization = `Bearer ${accessToken}`;
+    let res: Response | null = null;
+    try {
+      res = await fetch(`/api${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'same-origin' });
+    } catch {
+      if (!retryNetwork || attempt >= WAKE_DELAYS.length) {
+        if (woke) serverState('ok');
+        throw new ApiError(0, 'NETWORK', 'Server javob bermayapti. Internetni tekshiring yoki bir ozdan keyin qayta urinib ko‘ring.');
+      }
+    }
+    if (res && ![502, 503, 504].includes(res.status)) {
+      if (woke) serverState('ok');
+      return res;
+    }
+    if (attempt >= WAKE_DELAYS.length) {
+      if (woke) serverState('ok');
+      if (res) return res;
+      throw new ApiError(0, 'NETWORK', 'Server javob bermayapti. Bir ozdan keyin qayta urinib ko‘ring.');
+    }
+    woke = true;
+    serverState('waking');
+    await sleep(WAKE_DELAYS[attempt]!);
   }
 }
 
@@ -48,7 +76,7 @@ async function parse<T>(res: Response): Promise<T> {
   try {
     json = (await res.json()) as Envelope<T>;
   } catch {
-    throw new ApiError(res.status, 'BAD_RESPONSE', 'Serverdan noto‘g‘ri javob keldi.');
+    throw new ApiError(res.status, [502, 503, 504].includes(res.status) ? 'UNAVAILABLE' : 'BAD_RESPONSE', [502, 503, 504].includes(res.status) ? 'Server hozir band yoki uyg‘onmoqda. 1 daqiqadan keyin qayta urinib ko‘ring.' : 'Serverdan noto‘g‘ri javob keldi.');
   }
   if (res.ok && json.success) return json.data as T;
   const e = json.error;

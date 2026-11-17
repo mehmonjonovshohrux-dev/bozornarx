@@ -33,6 +33,8 @@ export function PwaClient() {
       try { if (localStorage.getItem('bn_install_dismissed') === '1') return; } catch { /* ignore */ }
       setInstall(e as InstallEvent);
     };
+    const keep = (e: Event) => { e.preventDefault(); (window as unknown as { __bnInstall?: Event }).__bnInstall = e; window.dispatchEvent(new Event('bn-install')); };
+    window.addEventListener('beforeinstallprompt', keep);
     window.addEventListener('beforeinstallprompt', onPrompt);
 
     const ua = navigator.userAgent;
@@ -41,7 +43,7 @@ export function PwaClient() {
     let dismissed = false;
     try { dismissed = localStorage.getItem('bn_ios_hint') === '1'; } catch { /* ignore */ }
     if (isIos && !standalone && !dismissed) setIosHint(true);
-    return () => window.removeEventListener('beforeinstallprompt', onPrompt);
+    return () => { window.removeEventListener('beforeinstallprompt', onPrompt); window.removeEventListener('beforeinstallprompt', keep); };
   }, []);
 
   const dismiss = (key: string) => { try { localStorage.setItem(key, '1'); } catch { /* ignore */ } };

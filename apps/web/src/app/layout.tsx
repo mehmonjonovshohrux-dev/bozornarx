@@ -4,6 +4,9 @@ import './globals.css';
 import { AuthProvider } from '@/lib/auth-context';
 import { SplashGate } from '@/components/SplashGate';
 import { PwaClient } from '@/components/PwaClient';
+import { AppLock } from '@/components/AppLock';
+import { BackGuard } from '@/components/BackGuard';
+import { ServerStatus } from '@/components/ServerStatus';
 
 export const metadata: Metadata = {
   title: { default: 'BozorNarx — Bozor narxlari bir joyda', template: '%s · BozorNarx' },
@@ -24,6 +27,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           {children}
           <SplashGate />
           <PwaClient />
+          <ServerStatus />
+          <BackGuard />
+          <AppLock />
         </AuthProvider>
       </body>
     </html>

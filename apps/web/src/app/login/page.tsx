@@ -3,11 +3,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { AuthShell, FieldError } from '@/components/AuthShell';
 import { VerifyFlow } from '@/components/auth/VerifyFlow';
+import { PasswordInput } from '@/components/PasswordInput';
 import { ApiError, authApi, type CodeSent } from '@/lib/api';
 import { safeNext } from '@/lib/fmt';
 import { useAuth } from '@/lib/auth-context';
@@ -20,7 +21,9 @@ type FormValues = z.infer<typeof schema>;
 
 export default function LoginPage() {
   const router = useRouter();
-  const { reload } = useAuth();
+  const { reload, user, loading } = useAuth();
+  // Already signed in (e.g. the app was reopened): go straight in, never show the login form or let Back return to it.
+  useEffect(() => { if (!loading && user) router.replace(safeNext()); }, [loading, user, router]);
   const [error, setError] = useState<string | null>(null);
   const [verify, setVerify] = useState<CodeSent | null>(null);
   const { register, handleSubmit, formState } = useForm<FormValues>({ resolver: zodResolver(schema) });
@@ -89,7 +92,7 @@ export default function LoginPage() {
           <label className="label" htmlFor="password">
             Parol
           </label>
-          <input id="password" type="password" autoComplete="current-password" className={`input ${errors.password ? 'input-error' : ''}`} {...register('password')} />
+          <PasswordInput id="password" autoComplete="current-password" className={`input ${errors.password ? 'input-error' : ''}`} {...register('password')} />
           <FieldError message={errors.password?.message} />
         </div>
         {error && (
