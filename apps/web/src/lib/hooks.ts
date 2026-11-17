@@ -4,18 +4,24 @@ import { ApiError, api } from './api';
 
 export interface Query<T> { data: T | undefined; error: ApiError | null; loading: boolean; reload: () => void }
 
+/** Stale-while-revalidate memory cache: a page you already opened shows its last data instantly and refreshes in the background. Cleared on login/logout. */
+const CACHE = new Map<string, unknown>();
+export const clearApiCache = () => CACHE.clear();
+
 /** Small fetch hook (no external cache library): re-fetches when `path` changes; `path=null` skips. */
 export function useApi<T>(path: string | null): Query<T> {
-  const [data, setData] = useState<T>();
+  const key = path === null ? null : `u:${path}`;
+  const [data, setData] = useState<T | undefined>(() => (key !== null ? (CACHE.get(key) as T | undefined) : undefined));
   const [error, setError] = useState<ApiError | null>(null);
-  const [loading, setLoading] = useState(path !== null);
+  const [loading, setLoading] = useState(path !== null && data === undefined);
   const [tick, setTick] = useState(0);
   const seq = useRef(0);
   useEffect(() => {
     if (path === null) { setLoading(false); return; }
     const mine = ++seq.current;
-    setLoading(true);
-    api<T>(path).then((d) => { if (mine === seq.current) { setData(d); setError(null); } })
+    const cached = CACHE.get(`u:${path}`) as T | undefined;
+    if (cached !== undefined) setData(cached); else setLoading(true);
+    api<T>(path).then((d) => { CACHE.set(`u:${path}`, d); if (mine === seq.current) { setData(d); setError(null); } })
       .catch((e: unknown) => { if (mine === seq.current) setError(e instanceof ApiError ? e : new ApiError(0, 'ERROR', 'Xatolik yuz berdi.')); })
       .finally(() => { if (mine === seq.current) setLoading(false); });
   }, [path, tick]);
@@ -25,16 +31,17 @@ export function useApi<T>(path: string | null): Query<T> {
 
 /** Public (no-auth) variant for the guest catalog. */
 export function usePublicApi<T>(path: string | null): Query<T> {
-  const [data, setData] = useState<T>();
+  const [data, setData] = useState<T | undefined>(() => (path !== null ? (CACHE.get(`p:${path}`) as T | undefined) : undefined));
   const [error, setError] = useState<ApiError | null>(null);
-  const [loading, setLoading] = useState(path !== null);
+  const [loading, setLoading] = useState(path !== null && data === undefined);
   const [tick, setTick] = useState(0);
   const seq = useRef(0);
   useEffect(() => {
     if (path === null) { setLoading(false); return; }
     const mine = ++seq.current;
-    setLoading(true);
-    api<T>(path, { auth: false }).then((d) => { if (mine === seq.current) { setData(d); setError(null); } })
+    const cached = CACHE.get(`p:${path}`) as T | undefined;
+    if (cached !== undefined) setData(cached); else setLoading(true);
+    api<T>(path, { auth: false }).then((d) => { CACHE.set(`p:${path}`, d); if (mine === seq.current) { setData(d); setError(null); } })
       .catch((e: unknown) => { if (mine === seq.current) setError(e instanceof ApiError ? e : new ApiError(0, 'ERROR', 'Xatolik yuz berdi.')); })
       .finally(() => { if (mine === seq.current) setLoading(false); });
   }, [path, tick]);

@@ -30,7 +30,7 @@ export default function Home() {
           <nav className="hidden items-center gap-6 text-[15px] font-semibold text-ink-soft md:flex" aria-label="Asosiy">
             <Link href="/catalog" className="hover:text-brand-700">Katalog</Link><Link href="/map" className="hover:text-brand-700">Xarita</Link>
           </nav>
-          <div className="flex gap-2">{user ? <Link href="/dashboard" className="btn btn-primary !min-h-[42px] !px-5">Kabinet</Link> : <><Link href="/login" className="btn btn-ghost !min-h-[42px] !px-4">Kirish</Link><Link href="/register" className="btn btn-primary !min-h-[42px] !px-4">Ro‘yxatdan o‘tish</Link></>}</div>
+          <div className="flex gap-2">{user ? <Link href="/dashboard" className="btn btn-primary !min-h-[42px] !px-5">Kabinet</Link> : <><Link href="/login" className="btn btn-ghost whitespace-nowrap !min-h-[42px] !px-4">Kirish</Link><Link href="/register" className="btn btn-primary whitespace-nowrap !min-h-[42px] !px-4"><span className="sm:hidden">Ro‘yxat</span><span className="hidden sm:inline">Ro‘yxatdan o‘tish</span></Link></>}</div>
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-4 pb-16 pt-5">

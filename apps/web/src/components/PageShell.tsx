@@ -19,8 +19,8 @@ export function PageShell({ children }: { children: ReactNode }) {
           <nav className="flex items-center gap-2 text-sm font-semibold">
             <Link href="/catalog" className="hidden px-3 py-2 text-ink-soft sm:block">Katalog</Link>
             <Link href="/map" className="hidden px-3 py-2 text-ink-soft sm:block">Xarita</Link>
-            <Link href="/login" className="btn btn-ghost !min-h-[40px] !px-4">Kirish</Link>
-            <Link href="/register" className="btn btn-primary !min-h-[40px] !px-4">Ro‘yxatdan o‘tish</Link>
+            <Link href="/login" className="btn btn-ghost whitespace-nowrap !min-h-[40px] !px-4">Kirish</Link>
+            <Link href="/register" className="btn btn-primary whitespace-nowrap !min-h-[40px] !px-4"><span className="sm:hidden">Ro‘yxat</span><span className="hidden sm:inline">Ro‘yxatdan o‘tish</span></Link>
           </nav>
         </div>
       </header>

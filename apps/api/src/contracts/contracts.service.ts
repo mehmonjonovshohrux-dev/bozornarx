@@ -413,7 +413,7 @@ export class ContractsService {
   async detail(user: AuthUser, id: string) {
     const { c, role } = await this.party(user, id);
     const [versions, events, order] = await Promise.all([
-      this.prisma.contractVersion.findMany({ where: { contractId: id }, orderBy: { version: 'desc' }, include: { signatures: { select: { id: true, partyRole: true, certSubject: true, certSerial: true, certValidTo: true, verification: true, signedAt: true } } } }),
+      this.prisma.contractVersion.findMany({ where: { contractId: id }, orderBy: { version: 'desc' }, include: { signatures: { select: { id: true, partyRole: true, provider: true, certSubject: true, certSerial: true, certValidTo: true, verification: true, signedAt: true } } } }),
       this.prisma.contractEvent.findMany({ where: { contractId: id }, orderBy: { createdAt: 'asc' } }),
       c.orderId ? this.prisma.order.findUnique({ where: { id: c.orderId }, select: { id: true, number: true, status: true } }) : null,
     ]);
@@ -423,7 +423,7 @@ export class ContractsService {
       id: c.id, number: c.number, type: c.type, status: c.status, expiresAt: c.expiresAt, signedAt: c.signedAt, myRole: role ?? 'staff', order,
       body: latest.body, version: latest.version, documentSha256: latest.sha256,
       versions: versions.map((v) => ({ version: v.version, sha256: v.sha256, createdAt: v.createdAt, signatures: v.signatures })),
-      events, eimzo: this.eimzo.status(),
+      events, eimzo: this.eimzo.status(), demoSigning: this.env.DEMO_SIGNING === 'enabled',
       actions: {
         canEdit: !!role && c.status === 'DRAFT',
         canSubmit: !!role && c.status === 'DRAFT' && !c.orderId,

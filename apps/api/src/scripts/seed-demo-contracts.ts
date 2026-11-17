@@ -24,7 +24,12 @@ async function main() {
     let made = 0;
     for (const [n, signers] of Object.entries(PLAN)) {
       const order = await prisma.order.findUnique({ where: { number: `ORD-DEMO-${n}` }, include: { store: { select: { ownerId: true } }, contract: { select: { id: true } } } });
-      if (!order || order.contract) continue;
+      if (!order) continue;
+      if (order.contract) {
+        // A contract from an earlier seed: make its parties match the order (demo data only).
+        await prisma.contract.update({ where: { id: order.contract.id }, data: { buyerId: order.buyerId, sellerStoreId: order.storeId } });
+        continue;
+      }
       const c = await contracts.createForOrder(order.id, order.store.ownerId);
       for (const role of signers) {
         const uid = role === 'BUYER' ? order.buyerId : order.store.ownerId;

@@ -38,7 +38,8 @@ export default function ContractPage() {
         {a.canCancel && <button className="btn btn-ghost !text-danger" onClick={() => setModal('cancel')}>Bekor qilish</button>}
         {['FULLY_SIGNED', 'ACTIVE', 'COMPLETED'].includes(d.status) && <a className="btn btn-ghost" href={`/api/contracts/${id}/bundle`} target="_blank" rel="noreferrer">🗄️ Arxiv paketi (JSON)</a>}
       </div>
-      {!d.eimzo.configured && <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="note">{d.eimzo.message}</p>}
+      {d.demoSigning && <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="note">DEMO rejimi: imzolar oddiy elektron imzo (shaxsiy parolni qayta kiritish) bilan qo‘yiladi. Bu E-IMZO emas.</p>}
+      {!d.eimzo.configured && !d.demoSigning && <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="note">{d.eimzo.message}</p>}
       <article className="card space-y-4 p-5">
         <h2 className="text-lg font-bold text-brand-800">{d.body.title}</h2>
         <div className="grid gap-3 text-sm sm:grid-cols-2">
@@ -53,7 +54,7 @@ export default function ContractPage() {
         <p className="break-all border-t border-cream-200 pt-3 text-xs text-ink-muted">SHA-256: {d.documentSha256}</p>
       </article>
       <section className="card mt-4 p-4"><h2 className="mb-2 font-bold">Imzolar</h2>
-        {d.versions[0].signatures.length === 0 ? <p className="text-sm text-ink-muted">Hali imzolanmagan.</p> : d.versions[0].signatures.map((s: any) => <p key={s.id} className="text-sm">{s.partyRole === 'BUYER' ? 'Xaridor' : 'Sotuvchi'}: {s.certSubject ?? '—'} · {dt(s.signedAt)} · <Badge tone="ok">tekshirilgan</Badge></p>)}
+        {d.versions[0].signatures.length === 0 ? <p className="text-sm text-ink-muted">Hali imzolanmagan.</p> : d.versions[0].signatures.map((s: any) => <p key={s.id} className="text-sm">{s.partyRole === 'BUYER' ? 'Xaridor' : 'Sotuvchi'}: {s.certSubject ?? '—'} · {dt(s.signedAt)} · {s.provider === 'DEMO_SIMPLE' ? <Badge tone="warn">DEMO imzo (parol bilan, E-IMZO emas)</Badge> : <Badge tone="ok">E-IMZO tekshirilgan</Badge>}</p>)}
         <h2 className="mb-1 mt-4 font-bold">Versiyalar</h2><ul className="text-sm text-ink-soft">{d.versions.map((v: any) => <li key={v.version}>v{v.version} — {dt(v.createdAt)} — <a className="underline" href={`/api/contracts/${id}/pdf?version=${v.version}`} target="_blank" rel="noreferrer">PDF</a></li>)}</ul></section>
       <section className="card mt-4 p-4"><h2 className="mb-2 font-bold">Tarix</h2><ol className="space-y-1 text-sm">{d.events.map((e: any) => <li key={e.id}><span className="text-ink-muted">{dt(e.createdAt)}</span> — {e.type}</li>)}</ol></section>
       <SignModal open={modal === 'sign'} id={id} info={d} onClose={() => { setModal(null); c.reload(); }} />

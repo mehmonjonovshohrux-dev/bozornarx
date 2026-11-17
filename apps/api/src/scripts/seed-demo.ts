@@ -75,7 +75,12 @@ async function main() {
       let market = null;
       if (s.market) market = (await prisma.market.findFirst({ where: { name: s.market } })) ?? (await prisma.market.create({ data: { name: s.market, regionId: region.id, address: `${s.region}, markaziy bozor`, lat: (region.lat ?? 41.3) + 0.01, lng: (region.lng ?? 69.2) + 0.01 } }));
       const found = await prisma.store.findFirst({ where: { name: s.store } });
-      stores.push(found ?? (await prisma.store.create({ data: {
+      if (found) {
+        // A store left over from an earlier seed may belong to a different (now replaced) user: always re-attach it to this seller.
+        stores.push(await prisma.store.update({ where: { id: found.id }, data: { ownerId: sellers[i]!.id, regionId: region.id, marketId: market?.id ?? null, status: s.status, verifiedAt: s.status === 'VERIFIED' ? (found.verifiedAt ?? new Date()) : null, deletedAt: null } }));
+        continue;
+      }
+      stores.push((await prisma.store.create({ data: {
         name: s.store, slug: `demo-${slug(s.local.replace('demo.', ''))}`, ownerId: sellers[i]!.id, regionId: region.id, marketId: market?.id, status: s.status, verifiedAt: s.status === 'VERIFIED' ? new Date() : null,
         description: 'Demo do‘kon: sinov uchun yaratilgan.', lat: (region.lat ?? 41.3) + (rnd() - 0.5) * 0.06, lng: (region.lng ?? 69.2) + (rnd() - 0.5) * 0.06,
       } })));
@@ -121,6 +126,16 @@ async function main() {
     }
 
     // ---- orders in every state (buyer side + seller side can be tested)
+    const CHAIN = ['CREATED', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'COMPLETED'];
+    const writeEvents = async (orderId: string, status: string, buyerId: string, sellerId: string, start: Date) => {
+      const upto = status === 'CANCELLED' ? 0 : CHAIN.indexOf(status);
+      const path = status === 'CANCELLED' ? ['CREATED', 'CANCELLED'] : CHAIN.slice(0, upto + 1);
+      let prev: string | null = null;
+      for (const [k, st] of path.entries()) {
+        await prisma.orderEvent.create({ data: { orderId, actorId: st === 'CREATED' ? buyerId : sellerId, fromState: prev, toState: st, note: st === 'CANCELLED' ? 'Xaridor bekor qildi' : null, createdAt: new Date(start.getTime() + k * 3 * 3_600_000) } });
+        prev = st;
+      }
+    };
     type Item = [number, number]; // [productIdx, qty]
     const ORDERS: Array<{ n: string; b: number; s: number; status: 'COMPLETED' | 'DELIVERED' | 'SHIPPED' | 'CONFIRMED' | 'CREATED' | 'CANCELLED'; ago: number; items: Item[]; rating?: number; review?: string }> = [
       { n: '0001', b: 0, s: 0, status: 'COMPLETED', ago: 20, items: [[0, 10], [1, 5]], rating: 5, review: 'Mahsulot yangi, narx bozordagidan arzon. Rahmat!' },
@@ -143,7 +158,13 @@ async function main() {
     ];
     for (const o of ORDERS) {
       const number = `ORD-DEMO-${o.n}`;
-      if (await prisma.order.findUnique({ where: { number } })) continue;
+      const present = await prisma.order.findUnique({ where: { number } });
+      if (present) {
+        // Re-attach an order from an earlier seed to this buyer/store, and make sure it has a history.
+        await prisma.order.update({ where: { id: present.id }, data: { buyerId: buyers[o.b]!.id, storeId: stores[o.s]!.id, status: o.status } });
+        if ((await prisma.orderEvent.count({ where: { orderId: present.id } })) === 0) await writeEvents(present.id, o.status, buyers[o.b]!.id, sellers[o.s]!.id, new Date(present.createdAt));
+        continue;
+      }
       const lines = [];
       for (const [pi, qty] of o.items) {
         const prId = priceOf.get(`${o.s}:${pi}`);
@@ -160,6 +181,7 @@ async function main() {
         deliveryMethod: delivery ? 'DELIVERY' : 'PICKUP', deliveryAddress: delivery ? 'Toshkent sh., Chilonzor tumani, 7-mavze, 12-uy' : null,
         items: { create: lines.map((l) => ({ productId: l.pr.productId, unitId: l.pr.unitId, quantity: l.qty, unitPrice: l.pr.price, priceRecordId: l.pr.id })) },
       } });
+      await writeEvents(order.id, o.status, buyers[o.b]!.id, sellers[o.s]!.id, createdAt);
       if (['SHIPPED', 'DELIVERED', 'COMPLETED'].includes(o.status)) {
         await prisma.delivery.create({ data: { orderId: order.id, status: o.status === 'SHIPPED' ? 'IN_TRANSIT' : o.status === 'DELIVERED' ? 'DELIVERED' : 'ACCEPTED', address: order.deliveryAddress, deliveredAt: o.status === 'SHIPPED' ? null : new Date(createdAt.getTime() + DAY), acceptedAt: o.status === 'COMPLETED' ? new Date(createdAt.getTime() + 1.2 * DAY) : null } });
       }
@@ -192,12 +214,17 @@ async function main() {
         [buyers[0]!.id, 'Ertaga 20 kg olsam bo‘ladimi?', 30, true], [sellers[0]!.id, 'Albatta, ertalab tayyor bo‘ladi.', 5, false],
       ];
       for (const [senderId, body, minsAgo, read] of lines) await prisma.message.create({ data: { conversationId: conv.id, senderId, body, createdAt: new Date(Date.now() - minsAgo * 60_000), readAt: read ? new Date() : null } });
-      await prisma.notification.createMany({ data: [
-        { userId: buyers[0]!.id, type: 'ORDER_STATUS', title: 'Buyurtma ORD-DEMO-0005: SHIPPED', body: 'Buyurtmangiz yo‘lda.', data: { url: '/orders' } },
-        { userId: buyers[0]!.id, type: 'PRICE_DROP', title: 'Kartoshka narxi tushdi', body: 'Kuzatuvingizdagi mahsulot arzonlashdi.', data: { url: '/catalog' } },
-        { userId: sellers[0]!.id, type: 'ORDER_NEW', title: 'Yangi buyurtma ORD-DEMO-0007', body: 'Tasdiqlang: shartnoma avtomatik yaratiladi.', data: { url: '/seller/orders' } },
-      ] });
     }
+    // Notifications that match the real demo orders (one per order state, for both sides). Created once per title+user.
+    const note = async (userId: string, type: string, title: string, body: string, url: string) => {
+      if (!(await prisma.notification.findFirst({ where: { userId, title } }))) await prisma.notification.create({ data: { userId, type, title, body, data: { url } } });
+    };
+    const orderIdOf = async (n: string) => (await prisma.order.findUnique({ where: { number: `ORD-DEMO-${n}` }, select: { id: true } }))?.id;
+    const o5 = await orderIdOf('0005'), o7 = await orderIdOf('0007'), o6 = await orderIdOf('0006');
+    if (o5) await note(buyers[0]!.id, 'ORDER_STATUS', 'Buyurtma ORD-DEMO-0005: yo‘lda', 'Buyurtmangiz yetkazilmoqda.', `/orders/${o5}`);
+    if (o7) await note(sellers[0]!.id, 'ORDER_NEW', 'Yangi buyurtma ORD-DEMO-0007', 'Tasdiqlang: shartnoma avtomatik yaratiladi.', `/orders/${o7}`);
+    if (o6) await note(sellers[1]!.id, 'ORDER_NEW', 'Buyurtma ORD-DEMO-0006 tasdiqlandi', 'Shartnoma imzosi kutilmoqda.', `/orders/${o6}`);
+    await note(buyers[0]!.id, 'PRICE_DROP', 'Kartoshka narxi tushdi', 'Kuzatuvingizdagi mahsulot arzonlashdi.', '/catalog');
 
     console.log('demo data ready.');
     console.log(`Accounts (password = DEMO_PASSWORD): ${[...SELLERS.map((x) => x.local), ...BUYERS.map((x) => x[0]), ...DEMO_MODERATORS.map((x) => x[0])].map((l) => l + DOMAIN).join(', ')}`);

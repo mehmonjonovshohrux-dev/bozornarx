@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { authApi, refreshSession, type Me } from './api';
+import { clearApiCache } from './hooks';
 
 interface AuthState {
   user: Me | null;
@@ -18,7 +19,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const reload = useCallback(async () => {
     try {
-      setUser(await authApi.me());
+      const me = await authApi.me();
+      clearApiCache(); // a different account must never see the previous one's cached pages
+      setUser(me);
     } catch {
       setUser(null);
     }
@@ -40,6 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await authApi.logout();
     } finally {
+      clearApiCache();
       setUser(null);
     }
   }, []);
