@@ -3,6 +3,9 @@
 
 let accessToken: string | null = null;
 let refreshing: Promise<boolean> | null = null;
+/** Why the last refresh failed: 'denied' = no valid session (sign in again); 'unavailable' = server/network problem (keep the user signed in). */
+let refreshFailure: 'denied' | 'unavailable' | null = null;
+export const lastRefreshFailure = () => refreshFailure;
 
 export class ApiError extends Error {
   readonly status: number;
@@ -90,9 +93,11 @@ export function refreshSession(): Promise<boolean> {
       const res = await send('/auth/refresh', 'POST', {}, false);
       const data = await parse<{ accessToken: string }>(res);
       accessToken = data.accessToken;
+      refreshFailure = null;
       return true;
-    } catch {
+    } catch (e) {
       accessToken = null;
+      refreshFailure = e instanceof ApiError && (e.status === 401 || e.status === 403) ? 'denied' : 'unavailable';
       return false;
     } finally {
       refreshing = null;

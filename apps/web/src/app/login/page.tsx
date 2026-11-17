@@ -26,7 +26,8 @@ export default function LoginPage() {
   useEffect(() => { if (!loading && user) router.replace(safeNext()); }, [loading, user, router]);
   const [error, setError] = useState<string | null>(null);
   const [verify, setVerify] = useState<CodeSent | null>(null);
-  const { register, handleSubmit, formState } = useForm<FormValues>({ resolver: zodResolver(schema) });
+  const { register, handleSubmit, formState, setFocus } = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { email: typeof window !== 'undefined' ? (localStorage.getItem('bn_last_email') ?? '') : '' } });
+  useEffect(() => { if (localStorage.getItem('bn_last_email')) setFocus('password'); }, [setFocus]);
   const { errors, isSubmitting } = formState;
 
   async function onSubmit(v: FormValues) {

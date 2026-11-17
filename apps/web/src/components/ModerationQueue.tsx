@@ -20,8 +20,8 @@ export function ModerationQueue({ path, postBase, params, render, actions, reaso
       <ErrorBox error={q.error} retry={q.reload} />{q.loading && !q.data && <Spinner />}
       {q.data?.items.length === 0 && <Empty title={empty} />}
       <ul className="space-y-3">{q.data?.items.map((it) => (
-        <li key={it.id} className="card flex flex-wrap items-center justify-between gap-3 p-4"><div className="min-w-0 flex-1">{render(it)}</div>
-          <div className="flex gap-2">{actions.map((a) => <button key={a.action} className={`btn !min-h-[40px] !px-4 ${a.danger ? 'btn-ghost !text-danger' : 'btn-primary'}`} onClick={() => { setSel({ item: it, action: a }); setReason(''); }}>{a.label}</button>)}</div></li>))}</ul>
+        <li key={it.id} className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0 flex-1 break-words text-[15px] leading-snug [&_p]:mt-1">{render(it)}</div>
+          <div className="flex shrink-0 gap-2 border-t border-cream-200 pt-3 sm:border-0 sm:pt-0">{actions.map((a) => <button key={a.action} className={`btn !min-h-[34px] !rounded-lg !px-3 !py-1 !text-[13px] ${a.danger ? 'btn-ghost !text-danger' : 'btn-primary'}`} onClick={() => { setSel({ item: it, action: a }); setReason(''); }}>{a.label}</button>)}</div></li>))}</ul>
       {q.data && <Pager page={page} pages={q.data.pages ?? 1} onPage={setPage} />}
       <Modal open={!!sel} title={sel?.action.label ?? ''} onClose={() => setSel(null)}>
         <Field label="Sabab / izoh (foydalanuvchiga ko‘rsatiladi)"><textarea className="input" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
