@@ -2,7 +2,7 @@
 import clsx from 'clsx';
 import { categoryArt, productArt } from '@/lib/productArt';
 import Link from 'next/link';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { ApiError } from '@/lib/api';
 
 export function Spinner({ label = 'Yuklanmoqda…' }: { label?: string }) {
@@ -123,20 +123,23 @@ export function Confirm({ open, title, text, danger, busy, onYes, onNo }: { open
 }
 
 export function ProductImage({ id, alt, name, category, className }: { id: string | null | undefined; alt: string; name?: string; category?: string | null; className?: string }) {
-  // A real uploaded photo always wins; otherwise the matching illustration from /assets (see lib/productArt.ts).
+  // A seller's uploaded photo always wins and is left untouched. Otherwise: real demo photo from lib/photos.ts (Unsplash), cropped to
+  // fill the box (object-cover), lazy-loaded; if missing or it fails to load, a neutral placeholder is shown (never a drawing).
+  const [failed, setFailed] = useState(false);
   // eslint-disable-next-line @next/next/no-img-element
   if (id) return <img src={`/api/files/${id}/public`} alt={alt} loading="lazy" className={clsx('object-cover', className)} />;
-  return (
-    <div className={clsx('flex items-center justify-center bg-gradient-to-b from-cream-50 to-brand-50', className)}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={productArt(name ?? alt, category)} alt={alt} loading="lazy" className="h-full max-h-full w-full max-w-full object-contain p-2" />
-    </div>
-  );
+  const src = productArt(name ?? alt, category);
+  if (!src || failed) return <div role="img" aria-label={alt} className={clsx('bg-cream-200', className)} />;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} className={clsx('bg-cream-200 object-cover', className)} />;
 }
 
 export function CategoryArt({ name, className }: { name: string; className?: string }) {
+  const [failed, setFailed] = useState(false);
+  const src = categoryArt(name);
+  if (!src || failed) return <div role="img" aria-label={name} className={clsx('bg-cream-200', className)} />;
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={categoryArt(name)} alt={name} loading="lazy" className={clsx('object-contain', className)} />;
+  return <img src={src} alt={name} loading="lazy" onError={() => setFailed(true)} className={clsx('bg-cream-200 object-cover', className)} />;
 }
 
 export function LinkCard({ href, children }: { href: string; children: ReactNode }) {

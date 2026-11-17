@@ -29,7 +29,7 @@ export default function ProductPage() {
     <PageShell>
       <Link href="/catalog" className="text-sm font-semibold text-brand-700">← Katalog</Link>
       <div className="mt-3 grid gap-5 md:grid-cols-[280px_1fr]">
-        <ProductImage id={p.images[0]?.fileId} alt={p.name} className="h-64 w-full rounded-2xl" />
+        <ProductImage id={p.images?.[0]?.fileId} alt={p.name} name={p.name} category={p.category?.name} className="h-64 w-full rounded-2xl" />
         <div>
           <p className="text-sm text-ink-muted">{p.category.name}{p.brand ? ` · ${p.brand}` : ''}</p>
           <h1 className="text-3xl font-extrabold text-brand-800">{p.name}</h1>
@@ -86,6 +86,7 @@ function Offers({ compare, canBuy }: { compare: { data?: any; loading: boolean; 
   if (compare.loading && !compare.data) return <Spinner />;
   if (compare.error) return <ErrorBox error={compare.error} retry={compare.reload} />;
   const d = compare.data;
+  if (!d) return <Spinner />;
   if (d.offers.length === 0 && d.notComparable.length === 0) return <p className="card p-6 text-center text-ink-soft">Bu mahsulot uchun hozircha narx kiritilmagan.</p>;
   return (
     <div className="space-y-3">

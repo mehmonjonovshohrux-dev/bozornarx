@@ -19,7 +19,8 @@ export function useApi<T>(path: string | null): Query<T> {
       .catch((e: unknown) => { if (mine === seq.current) setError(e instanceof ApiError ? e : new ApiError(0, 'ERROR', 'Xatolik yuz berdi.')); })
       .finally(() => { if (mine === seq.current) setLoading(false); });
   }, [path, tick]);
-  return { data, error, loading, reload: useCallback(() => setTick((t) => t + 1), []) };
+  // A non-null path with nothing loaded yet is still "loading" (prevents a one-render gap where consumers see no data and no error).
+  return { data, error, loading: loading || (path !== null && data === undefined && error === null), reload: useCallback(() => setTick((t) => t + 1), []) };
 }
 
 /** Public (no-auth) variant for the guest catalog. */
@@ -37,7 +38,8 @@ export function usePublicApi<T>(path: string | null): Query<T> {
       .catch((e: unknown) => { if (mine === seq.current) setError(e instanceof ApiError ? e : new ApiError(0, 'ERROR', 'Xatolik yuz berdi.')); })
       .finally(() => { if (mine === seq.current) setLoading(false); });
   }, [path, tick]);
-  return { data, error, loading, reload: useCallback(() => setTick((t) => t + 1), []) };
+  // A non-null path with nothing loaded yet is still "loading" (prevents a one-render gap where consumers see no data and no error).
+  return { data, error, loading: loading || (path !== null && data === undefined && error === null), reload: useCallback(() => setTick((t) => t + 1), []) };
 }
 
 export function useAction<A extends unknown[], R>(fn: (...a: A) => Promise<R>) {

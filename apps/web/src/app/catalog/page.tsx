@@ -43,7 +43,7 @@ function Catalog() {
             {list.data?.items.map((p) => (
               <li key={p.id}>
                 <Link href={`/catalog/${p.slug}`} className="card block overflow-hidden transition hover:-translate-y-0.5 hover:border-brand-300">
-                  <ProductImage id={p.imageId} alt={p.name} name={p.name} category={p.category.name} className="h-40 w-full" />
+                  <ProductImage id={p.imageId} alt={p.name} name={p.name} category={p.category.name} className="aspect-square w-full" />
                   <div className="p-4">
                     <p className="text-xs text-ink-muted">{p.category.name}</p>
                     <h3 className="font-bold text-ink">{p.name}</h3>
