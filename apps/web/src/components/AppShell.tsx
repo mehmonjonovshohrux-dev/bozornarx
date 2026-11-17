@@ -70,6 +70,35 @@ const NAVS: Record<RoleKey, NavItem[]> = {
     { href: '/security', label: 'Xavfsizlik va ilova', icon: 'shield' },
   ],
 };
+/** Shown in the drawer for every role. */
+const COMMON: NavItem[] = [
+  { href: '/profile', label: 'Profil', icon: 'user' },
+  { href: '/settings', label: 'Sozlamalar', icon: 'settings' },
+  { href: '/guide', label: 'Yo‘riqnomalar', icon: 'list' },
+  { href: '/faq', label: 'Ko‘p beriladigan savollar', icon: 'help' },
+  { href: '/about', label: 'Ilova haqida', icon: 'info' },
+];
+/** Super Admin's control-center sections: on a phone they live in the drawer instead of a wide tab strip. */
+export const ADMIN_SECTIONS: NavItem[] = [
+  { href: '/admin?tab=stats', label: 'Statistika', icon: 'bars' },
+  { href: '/admin?tab=users', label: 'Foydalanuvchilar', icon: 'users' },
+  { href: '/admin?tab=stores', label: 'Do‘konlar', icon: 'store' },
+  { href: '/admin?tab=products', label: 'Mahsulotlar', icon: 'box' },
+  { href: '/admin?tab=orders', label: 'Buyurtmalar', icon: 'package' },
+  { href: '/admin?tab=payments', label: 'To‘lovlar', icon: 'wallet' },
+  { href: '/admin?tab=plans', label: 'Tariflar', icon: 'credit' },
+  { href: '/admin?tab=settings', label: 'Sozlamalar (tizim)', icon: 'settings' },
+  { href: '/admin?tab=audit', label: 'Audit jurnali', icon: 'history' },
+  { href: '/admin?tab=templates', label: 'Shablonlar', icon: 'doc' },
+  { href: '/admin?tab=catalog', label: 'Hudud/Kategoriya', icon: 'layers' },
+];
+/** Bottom bar, same shape for everyone: Home, the role's main work area, Map, Settings. */
+const MAIN: Record<RoleKey, NavItem> = {
+  BUYER: { href: '/orders', label: 'Buyurtmalar', icon: 'package' },
+  SELLER: { href: '/seller', label: 'Do‘kon', icon: 'store' },
+  MODERATOR: { href: '/moderation', label: 'Tekshiruv', icon: 'list' },
+  SUPER_ADMIN: { href: '/admin', label: 'Boshqaruv', icon: 'server' },
+};
 const SKIN: Record<RoleKey, { side: string; active: string; chip: string }> = {
   BUYER: { side: 'from-brand-900 to-brand-800', active: 'bg-white/15 text-white', chip: 'bg-white/10' },
   SELLER: { side: 'from-brand-900 to-brand-800', active: 'bg-white/15 text-white', chip: 'bg-white/10' },
@@ -111,8 +140,11 @@ export function AppShell({ children, wide }: { children: ReactNode; wide?: boole
   }, [user]);
 
   if (loading || !user) return <div className="min-h-[100dvh]"><Spinner /></div>;
-  const active = (href: string) => path === href || (href !== '/' && path.startsWith(href + '/'));
-  const mobileItems = items.filter((i) => i.mobile).slice(0, 5);
+  const active = (href: string) => { const base = href.split('?')[0]!; return path === base || (base !== '/' && path.startsWith(base + '/')); };
+  const mobileItems: NavItem[] = [
+    { href: '/dashboard', label: 'Bosh sahifa', icon: 'home' }, MAIN[role],
+    { href: '/map', label: 'Xarita', icon: 'map' }, { href: '/settings', label: 'Sozlamalar', icon: 'settings' },
+  ];
   const name = user.profile?.fullName ?? user.roles.map((r) => ROLE_LABEL[r] ?? r).join('');
   const initials = name.split(' ').map((s) => s[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
   const search = (e: FormEvent) => { e.preventDefault(); router.push(`/catalog${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`); };
@@ -125,7 +157,9 @@ export function AppShell({ children, wide }: { children: ReactNode; wide?: boole
         <span className="min-w-0"><span className="block truncate text-sm font-bold">{name}</span><span className="block text-xs text-emerald-100/80">{ROLE_LABEL[role]}</span></span>
       </div>
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-3" aria-label="Bo‘limlar">
-        {items.map((i) => (
+        {[...items, ...(role === 'SUPER_ADMIN' ? [{ href: '#sec', label: 'Boshqaruv bo‘limlari', icon: '' }, ...ADMIN_SECTIONS] : []), { href: '#more', label: 'Ilova', icon: '' }, ...COMMON].map((i) => i.href.startsWith('#') ? (
+          <div key={i.href} className="px-3 pb-1 pt-3 text-[11px] font-bold uppercase tracking-wide text-emerald-100/60">{i.label}</div>
+        ) : (
           <Link key={i.href} href={i.href} onClick={() => setMenu(false)} aria-current={active(i.href) ? 'page' : undefined}
             className={clsx('flex items-center gap-3 rounded-xl px-3 py-2.5 text-[14.5px] font-semibold transition', active(i.href) ? skin.active : 'text-emerald-50/85 hover:bg-white/10')}>
             <Icon name={i.icon} size={19} /><span className="flex-1">{i.label}</span>
