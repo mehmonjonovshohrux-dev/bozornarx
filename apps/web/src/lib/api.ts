@@ -39,9 +39,7 @@ interface Envelope<T> {
 // retry (network errors on GET/auth calls, and 502/503/504 which mean "nothing was processed") and tell the UI so it can show a friendly banner.
 const WAKE_DELAYS = [1500, 2500, 3500, 5000, 6000, 8000, 10000, 12000];
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-function serverState(state: 'waking' | 'ok') {
-  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('bn-server', { detail: state }));
-}
+function serverState(_state: 'waking' | 'ok') { /* silent: no banner, retries happen in the background */ }
 
 async function send(path: string, method: string, body: unknown, withAuth: boolean): Promise<Response> {
   const headers: Record<string, string> = { 'x-client': 'web' };
@@ -109,6 +107,7 @@ export function refreshSession(): Promise<boolean> {
 export async function api<T>(path: string, opts: { method?: string; body?: unknown; auth?: boolean } = {}): Promise<T> {
   const method = opts.method ?? (opts.body === undefined ? 'GET' : 'POST');
   const auth = opts.auth ?? true;
+  if (auth && !accessToken && !path.startsWith('/auth/')) await refreshSession(); // cached profile opens the page at once; get the token first instead of a wasted 401 round-trip
   let res = await send(path, method, opts.body, auth);
   if (res.status === 401 && auth && (await refreshSession())) {
     res = await send(path, method, opts.body, auth); // one retry with the new token

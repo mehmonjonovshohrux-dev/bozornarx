@@ -144,7 +144,7 @@ export function ProductImage({ id, alt, name, category, className }: { id: strin
   const src = productArt(name ?? alt, category);
   if (!src || failed) return <div role="img" aria-label={alt} className={clsx('bg-cream-200', className)} />;
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} className={clsx('bg-cream-200 object-cover', className)} />;
+  return <img src={src} alt={alt} loading="lazy" decoding="async" onError={() => setFailed(true)} className={clsx('bg-cream-200 object-cover', className)} />;
 }
 
 export function CategoryArt({ name, className }: { name: string; className?: string }) {
@@ -152,7 +152,7 @@ export function CategoryArt({ name, className }: { name: string; className?: str
   const src = categoryArt(name);
   if (!src || failed) return <div role="img" aria-label={name} className={clsx('bg-cream-200', className)} />;
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={src} alt={name} loading="lazy" onError={() => setFailed(true)} className={clsx('bg-cream-200 object-cover', className)} />;
+  return <img src={src} alt={name} loading="lazy" decoding="async" onError={() => setFailed(true)} className={clsx('bg-cream-200 object-cover', className)} />;
 }
 
 export function LinkCard({ href, children }: { href: string; children: ReactNode }) {

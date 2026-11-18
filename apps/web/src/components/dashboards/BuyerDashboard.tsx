@@ -23,7 +23,7 @@ export function BuyerDashboard() {
   return (
     <Dash>
       <div className="grid gap-5 xl:grid-cols-[1.6fr_1fr]">
-        <Hero title={`Xush kelibsiz${first ? `, ${first}` : ''}!`} text="Bugungi eng qulay narxlar va ishonchli sotuvchilar bir joyda — BozorNarx’da." cta={{ href: '/catalog', label: 'Mahsulotlarni ko‘rish' }} art={['sabzi', 'pomidor', 'kartoshka']} />
+        <Hero title={`Xush kelibsiz${first ? `, ${first}` : ''}!`} text="Bugungi eng qulay narxlar va ishonchli sotuvchilar bir joyda — BozorNarx’da." cta={{ href: '/catalog', label: 'Mahsulotlarni ko‘rish' }} art={['Sabzi', 'Pomidor', 'Kartoshka']} />
         <Panel title="Mening faoliyatim">
           <Row href="/orders"><Icon name="package" className="text-brand-700" /><span className="flex-1 text-sm">Faol buyurtmalar</span><b>{d.activity.active}</b></Row>
           <Row href="/orders"><Icon name="truck" className="text-accent-600" /><span className="flex-1 text-sm">Kutilayotgan yetkazib berish</span><b>{d.activity.awaitingDelivery}</b></Row>
