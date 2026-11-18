@@ -41,6 +41,9 @@ fi
     echo "[entrypoint] creating and signing DEMO contracts"
     node dist/scripts/seed-demo-contracts.js || echo "[entrypoint] demo contracts failed (see message above)"
   fi
+  if [ "${DEMO_SEED:-}" = "yes" ] && [ -n "${DEMO_PASSWORD:-}" ]; then
+    node dist/scripts/seed-demo-extra.js || echo "[entrypoint] demo extra data failed (see message above)"
+  fi
   if [ "${DEMO_CLEANUP:-}" = "yes" ]; then
     echo "[entrypoint] removing DEMO data"
     ALLOW_DEMO_SEED=yes ALLOW_DEMO_IN_PRODUCTION=yes DEMO_CLEANUP=yes node dist/scripts/seed-demo.js && echo "[entrypoint] demo cleanup finished" || echo "[entrypoint] demo cleanup failed (see message above)"
