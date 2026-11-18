@@ -1,4 +1,5 @@
 'use client';
+import { PHOTOS } from '@/lib/photos';
 import clsx from 'clsx';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
@@ -33,7 +34,7 @@ export function Hero({ title, text, cta, art }: { title: string; text: string; c
         <p className="mt-2 text-[15px] text-emerald-50/90">{text}</p>
         {cta && <Link href={cta.href} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-extrabold text-brand-800 shadow">{cta.label}<Icon name="arrow" size={16} /></Link>}
       </div>
-      {art && <div className="pointer-events-none absolute bottom-0 right-3 hidden gap-0 sm:flex">{art.map((a, i) => /* eslint-disable-next-line @next/next/no-img-element */ <img key={a} src={`/assets/products/${a}.svg`} alt="" className={clsx('drop-shadow-xl', i === 1 ? 'h-44 w-44' : 'h-28 w-28 self-end')} />)}</div>}
+      {art && <div className="pointer-events-none absolute bottom-0 right-3 hidden gap-0 sm:flex">{art.map((a, i) => /* eslint-disable-next-line @next/next/no-img-element */ <img key={a} src={(PHOTOS[a] ?? '').replace('w=900', 'w=360')} alt="" loading="lazy" decoding="async" className={clsx('rounded-full border-4 border-white/80 object-cover shadow-xl', i === 1 ? 'h-40 w-40' : 'h-28 w-28 self-end')} />)}</div>}
     </div>
   );
 }
