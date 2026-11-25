@@ -12,6 +12,9 @@ fi
 echo "[entrypoint] applying database migrations (prisma migrate deploy)"
 npx prisma migrate deploy
 
+echo "[entrypoint] making sure every table has row-level security (blocks public REST access)"
+node dist/scripts/ensure-rls.js || echo "[entrypoint] ensure-rls failed (see message above); continuing"
+
 echo "[entrypoint] loading reference data"
 node dist/scripts/seed-reference.js
 
